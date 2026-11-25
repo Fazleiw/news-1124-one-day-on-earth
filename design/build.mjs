@@ -346,8 +346,8 @@ i{font-style:normal;text-box:trim-both cap alphabetic}
 h1{font:700 66px/1 ${SERIF};white-space:nowrap;letter-spacing:-.01em;text-box:trim-both cap alphabetic}
 .strap{font:700 15px/19px ${SANS};letter-spacing:.08em;text-transform:uppercase;text-align:right}
 .strap b{color:#F0A08C;font-weight:700}
-.deck{top:${DECK_Y}px;height:24px;font:700 19px/24px ${SANS};white-space:nowrap;overflow:hidden}
-.deck s{text-decoration:none;color:var(--acc);padding:0 7px}
+.deck{top:${DECK_Y}px;height:24px;font:700 19px/22px ${SANS};letter-spacing:-.005em;white-space:nowrap;overflow:hidden}
+.deck s{text-decoration:none;color:var(--acc);padding:0 5px}
 .tally{top:${TALLY_Y}px;height:22px;display:flex;align-items:center;gap:14px;white-space:nowrap;overflow:hidden;font:700 15px/1 ${SANS};letter-spacing:.06em;text-transform:uppercase}
 .tally>.t{color:var(--mute)}
 .rg{display:inline-flex;align-items:center;gap:6px}
@@ -362,10 +362,10 @@ h1{font:700 66px/1 ${SERIF};white-space:nowrap;letter-spacing:-.01em;text-box:tr
 .kick{display:flex;align-items:center;gap:6px;height:24px;flex:none;background:var(--ink);color:var(--paper);padding-right:3px}
 .nb{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:24px;height:24px;padding:0 3px;background:var(--acc);color:#fff;font:800 15px/1 ${SANS}}
 .pc{flex:1;min-width:0;font:700 15px/1 ${SANS};letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-box:trim-both cap alphabetic}
-.cf{display:inline-flex;align-items:center;flex:none;height:18px;padding:0 5px;border-radius:2px;font:800 14px/1 ${SANS};letter-spacing:.05em}
+.cf{display:inline-flex;align-items:center;flex:none;height:19px;padding:0 5px;border-radius:2px;font:800 15px/1 ${SANS};letter-spacing:.02em}
 .cf.confirmed{background:var(--paper);color:var(--ink)} .cf.official{background:var(--teal);color:#fff;box-shadow:0 0 0 1.5px var(--paper)}
 .cf.reported{background:var(--ochre);color:var(--ink)} .cf.claim{background:var(--acc);color:#fff;box-shadow:0 0 0 1.5px var(--paper)}
-.card .pc{letter-spacing:.02em}
+.card .pc{letter-spacing:-.01em}
 .card .cf{padding:0 4px;letter-spacing:.02em}
 .hd{font:800 22px/24px ${SANS};margin-top:5px}
 .h3{font:800 17px/19px ${SANS};margin-top:4px}
@@ -373,7 +373,7 @@ h1{font:700 66px/1 ${SERIF};white-space:nowrap;letter-spacing:-.01em;text-box:tr
 .lead .dk{line-height:18px}
 .lead .pc{font-size:17px}
 .fig{font:800 30px/1 ${SANS};fill:${ACC};text-anchor:middle}
-.cal{font:800 14px/1 ${SANS};fill:#fff;text-anchor:middle;letter-spacing:.04em}
+.cal{font:800 16px/1 ${SANS};fill:#fff;text-anchor:middle;letter-spacing:.04em}
 .day{font:800 26px/1 ${SANS};fill:${INK};text-anchor:middle}
 .pct{font:800 19px/1 ${SANS};fill:${ACC};text-anchor:middle}
 .low{top:${LOW_Y}px;bottom:${FOOT_H + 6}px;display:grid;grid-template-columns:${MAP_W}px 1fr;column-gap:18px}
@@ -384,17 +384,17 @@ h1{font:700 66px/1 ${SERIF};white-space:nowrap;letter-spacing:-.01em;text-box:tr
 .gr{fill:none;stroke:#C2CFD1;stroke-width:.6}
 .dot{fill:var(--ink)} .tk{stroke:var(--acc);stroke-width:1.6} .ae{fill:var(--acc)}
 .pr{fill:var(--acc);stroke:#fff;stroke-width:1.3}
-.pn{font:800 14px ${SANS};fill:#fff;text-anchor:middle}
+.pn{font:800 15px ${SANS};fill:#fff;text-anchor:middle}
 .legend{font:600 15px/18px ${SANS};color:var(--mute);margin-top:5px;white-space:nowrap}
 .legend b{color:var(--acc)}
-.digest{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-flow:column;grid-template-rows:repeat(10,auto);column-gap:16px;row-gap:1px;margin-top:5px;overflow:hidden}
+.digest{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-flow:column;grid-template-rows:repeat(10,auto);column-gap:16px;row-gap:0;margin-top:4px;overflow:hidden}
 .digest li{display:flex;align-items:center;gap:7px;min-width:0}
-.digest .nb{background:var(--ink);min-width:22px;height:19px;font-size:14px}
+.digest .nb{background:var(--ink);min-width:24px;height:20px;font-size:15px}
 .di{font:500 16px/19px ${SANS};white-space:nowrap;min-width:0}
 .di b{font-weight:800}
 .foot{position:absolute;left:0;top:${FOOT_Y}px;width:${W}px;height:${FOOT_H}px;background:var(--ink);color:var(--paper);padding:5px ${M}px 0;font:500 15px/19px ${SANS}}
 .foot div{white-space:nowrap;overflow:hidden}
-.foot .cf{height:16px;margin:0 5px 0 14px;vertical-align:1px} .foot .cf:first-child{margin-left:0}
+.foot .cf{height:19px;margin:0 5px 0 14px;vertical-align:0} .foot .cf:first-child{margin-left:0}
 .foot b{font-weight:800;color:#fff}
 </style></head><body>
 <header class="head"><h1>Tuesday 24 November 2026</h1>
