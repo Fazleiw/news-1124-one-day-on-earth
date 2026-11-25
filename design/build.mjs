@@ -161,13 +161,14 @@ ${burst(126, 28, 17)}`),
 
 // ---- second-tier scenes (viewBox 88 x 78) -----------------------------------------------------
 const SPOT = {
-  // A low skyline with one building collapsed into a heap, smoke rising from it, debris in the air.
+  // Intact blocks either side of a broken stump; its floors lie in a rubble heap and a smoke plume rises from it.
   gaza: () => art(88, 78, PANEL, `
-<circle cx="46" cy="44" r="8" fill="${MUTE}"/><circle cx="54" cy="30" r="11" fill="${SMOKE}"/><circle cx="62" cy="14" r="10" fill="${SMOKE}"/>
-<rect x="4" y="42" width="18" height="28" fill="${INK}"/><rect x="22" y="52" width="14" height="18" fill="${MUTE}"/>
-<rect x="64" y="36" width="20" height="34" fill="${INK}"/><path d="M69 44H79M69 54H79" stroke="${LIGHT}" stroke-width="4"/>
-<path d="M36 70L40 58L48 62L54 52L62 62L64 70Z" fill="${MUTE}"/><rect x="38" y="56" width="22" height="5" fill="${INK}" transform="rotate(-24 49 58)"/>
-<rect x="30" y="40" width="5" height="5" fill="${INK}" transform="rotate(20 32 42)"/><rect x="66" y="26" width="4" height="4" fill="${INK}"/>
+<circle cx="40" cy="34" r="9" fill="${MUTE}"/><circle cx="46" cy="22" r="11" fill="${MUTE}"/><circle cx="57" cy="13" r="12" fill="${SMOKE}"/><circle cx="72" cy="8" r="11" fill="${SMOKE}"/>
+<rect x="4" y="30" width="18" height="40" fill="${INK}"/><path d="M9 38H17M9 48H17M9 58H17" stroke="${LIGHT}" stroke-width="4"/>
+<rect x="70" y="40" width="16" height="30" fill="${INK}"/><path d="M74 48H82M74 58H82" stroke="${LIGHT}" stroke-width="4"/>
+<path d="M28 70V40L33 46L37 38L42 48L46 43V70Z" fill="${INK}"/>
+<path d="M24 70Q28 60 36 61Q44 53 54 58Q62 54 68 61Q74 63 76 70Z" fill="${MUTE}"/>
+<rect x="44" y="55" width="26" height="5" fill="${INK}" transform="rotate(-20 57 57)"/><rect x="34" y="62" width="7" height="5" fill="${OCHRE}" transform="rotate(15 37 64)"/><rect x="60" y="62" width="6" height="5" fill="${OCHRE}"/>
 <rect y="70" width="88" height="8" fill="${OCHRE}"/>`),
   // A gavel coming down on a microchip.
   huawei: () => art(88, 78, PANEL, `
@@ -182,14 +183,14 @@ const SPOT = {
 <rect x="64" y="12" width="8" height="54" rx="4" fill="${ACC}"/>
 <circle cx="68" cy="64" r="11" fill="${ACC}" stroke="${INK}" stroke-width="3"/>
 <path d="M78 18H84M78 30H84M78 42H84" stroke="${INK}" stroke-width="3"/>`),
-  // A jet climbing away on motion dashes, and a calendar with one date marked.
+  // A swept-wing jet climbing on motion dashes, and a calendar with one date ringed.
   hasina: () => art(88, 78, PANEL, `
-<path d="M4 74L22 62M2 62L16 53M12 77L28 67" stroke="${MUTE}" stroke-width="3" stroke-linecap="round" stroke-dasharray="6 4"/>
-<g transform="translate(36 48) rotate(-30)" fill="${INK}">
-<path d="M-26 -4H16Q28 -4 30 0Q28 4 16 4H-26Z"/><path d="M-4 -3L-14 -24H-7L10 -3ZM-4 3L-14 24H-7L10 3Z"/><path d="M-26 -3L-32 -12H-26L-18 -3ZM-26 3L-32 12H-26L-18 3Z"/></g>
-<rect x="56" y="6" width="28" height="28" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/><rect x="56" y="6" width="28" height="8" fill="${ACC}"/>
-<path d="M62 3V9M78 3V9" stroke="${INK}" stroke-width="3"/>
-<path d="M62 20h3M69 20h3M76 20h3M62 27h3M69 27h3" stroke="${INK}" stroke-width="3"/><rect x="75" y="24" width="6" height="6" fill="${ACC}"/>`),
+<path d="M8 38L17 34M18 74L27 70" stroke="${MUTE}" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 4"/>
+<g transform="translate(36 47) rotate(-24) scale(.78)" fill="${INK}">
+<path d="M-32 -4H18Q30 -4 34 0Q30 4 18 4H-32Z"/><path d="M6 -3L-12 -30H-20L-8 -3ZM6 3L-12 30H-20L-8 3Z"/><path d="M-22 -3L-32 -14H-37L-31 -3ZM-22 3L-32 14H-37L-31 3Z"/></g>
+<rect x="54" y="4" width="28" height="28" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/><rect x="54" y="4" width="28" height="9" fill="${ACC}"/>
+<path d="M60 0V8M76 0V8" stroke="${INK}" stroke-width="3"/>
+<path d="M58 19h4M65 19h4M58 26h4M65 26h4" stroke="${INK}" stroke-width="3"/><rect x="71" y="17" width="7" height="10" fill="${ACC}"/><circle cx="74.5" cy="22" r="6.5" fill="none" stroke="${INK}" stroke-width="2.5"/>`),
   // A supermarket front, trolley sign in the window, people walking out of the open door.
   market: () => art(88, 78, PANEL, `
 <rect x="4" y="8" width="80" height="62" fill="${INK}"/>
