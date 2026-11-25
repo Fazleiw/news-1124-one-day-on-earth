@@ -1,30 +1,39 @@
-// Builds design/atlas.html: a 1024x1024 illustrated front page of the world news of Tuesday 24 November 2026.
-// Deterministic: no randomness, no clock, no network. Map data: Natural Earth via world-atlas (data/).
-// CHECK=1 node design/build.mjs adds a layout checker to the page (overflow, overlap, pins); render.sh never sets it.
+// Builds design/atlas.html: a 1024x1024 front page of the world news of Tuesday 24 November 2026.
+// Deterministic: no randomness, no clock, no network, system fonts only. Map data: Natural Earth via world-atlas (data/).
+// CHECK=1 node design/build.mjs adds a layout checker to the page (clipping, band slack, pins, font sizes);
+// render.sh never sets it. Every story, place and figure traces to a row of design/sources.md (src: row number).
 //
-// Page, top to bottom: masthead (the date) / deck / region tally / 3 illustrated leads / 10 illustrated cards /
-// map index + numbered digest / confidence key + sources. Every story traces to design/sources.md.
+// Page, top to bottom: masthead with the date / three-teaser deck / 4 lead stories with scenes / 8 second-tier
+// stories with scenes / locator map + "Also on Tuesday" (20 one-liners) / closing line restating the date.
 //
-// Type scale, px at 1024 (nothing else is used): 66 date / 30 lead figure in art / 22 lead headline /
-// 26 calendar day in art / 19 deck / 17 card headline, lead kickers / 16 digest / 15 kickers, decks, tally, key, footer / 14 confidence badges, pin numbers.
+// Type scale, px at 1024 (nothing smaller than 15): 96 date / 34 lead figure / 25 second figure / 21 lead headline /
+// 19 deck / 18 legend / 17 masthead strap, closing line / 16 card headline, digest, lead place / 15 place, numbers, sources.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const here = new URL('./', import.meta.url);
 const topo = JSON.parse(readFileSync(new URL('data/countries-110m.json', here)));
 
 // ---- palette ----------------------------------------------------------------------------------
-const PAPER = '#F4F0E6', INK = '#191C22', ACC = '#C0391F', TEAL = '#1F6B6E', OCHRE = '#C9952E';
-const SMOKE = '#8E9094', WATER = '#A9C9C8', PANEL = '#E6E1D4', LIGHT = '#FBF8F1';
+// Paper, ink, one accent (figures, the strike marks) and one secondary (ochre). The six region colours appear only on
+// number chips, map pins and the legend; each carries white numbers at >= 4.5:1.
+const PAPER = '#F4F0E6', INK = '#191C22', ACC = '#C0391F', OCHRE = '#C9952E';
+const MUTE = '#3E424A', PANEL = '#E4DED0', LIGHT = '#FBF8F1', SMOKE = '#8E9094', SEA = '#6F95A6', EUBLUE = '#22409A';
+const REGION = {
+  Asia: '#A8285F', Americas: '#2356A0', Europe: '#6A3D9A',
+  'Middle East': '#8F5400', Africa: '#2C7232', Oceania: '#0B6E7A',
+};
+const REGION_ORDER = Object.keys(REGION);
+const WORLD = INK; // stories with no single place (sport, UN and WFP figures) use an ink chip and have no pin
 
 // ---- page bands (y, px at 1024) ---------------------------------------------------------------
 const W = 1024, M = 20;
-const HEAD_H = 80, DECK_Y = 90, TALLY_Y = 120, LEAD_Y = 152, LEAD_H = 228;
-const CARD_Y = LEAD_Y + LEAD_H + 12, CARD_H = 162, CARD_GAP = 10;
-const LOW_Y = CARD_Y + 2 * CARD_H + CARD_GAP + 12, FOOT_H = 48, FOOT_Y = W - FOOT_H;
-const ART_H = 112, SPOT_H = 60;
+const HEAD_H = 118, DECK_Y = 126, DECK_H = 30, RULE_Y = 163, LEAD_Y = 172, LEAD_H = 256;
+const SEC_Y = LEAD_Y + LEAD_H + 12, SEC_ROW = 112, SEC_GAP = 10, SEC_H = 2 * SEC_ROW + SEC_GAP;
+const FOOT_H = 52, FOOT_Y = W - FOOT_H, LOW_Y = SEC_Y + SEC_H + 12, LOW_H = FOOT_Y - 6 - LOW_Y;
+const COL_GAP = 14, COL_W = (W - 2 * M - 3 * COL_GAP) / 4;
 
-// ---- projection (Miller, cropped) -------------------------------------------------------------
-const MAP_W = 330, LON0 = -128, LON1 = 166, LAT_TOP = 72, LAT_BOT = -50, K = MAP_W / (LON1 - LON0);
+// ---- projection (Miller, cropped to where the day's stories are) ------------------------------
+const MAP_W = 304, LON0 = -100, LON1 = 166, LAT_TOP = 63, LAT_BOT = -42, K = MAP_W / (LON1 - LON0);
 const miller = (lat) => 1.25 * Math.log(Math.tan(Math.PI / 4 + 0.4 * lat * Math.PI / 180)) * 180 / Math.PI;
 const MAP_H = Math.round((miller(LAT_TOP) - miller(LAT_BOT)) * K);
 const px = (lon, lat) => [(lon - LON0) * K, (miller(LAT_TOP) - miller(lat)) * K];
@@ -61,222 +70,234 @@ for (const g of topo.objects.countries.geometries) {
 }
 
 // ---- illustration primitives ------------------------------------------------------------------
-// Flat shapes only. Each scene is drawn from what the report says, so the picture cannot outrun the text.
-const flame = (x, y, h, w, fill) =>
-  `<path d="M${x} ${y}C${x - w} ${y - h * 0.35} ${x - w * 0.55} ${y - h * 0.7} ${x} ${y - h}` +
-  `C${x + w * 0.4} ${y - h * 0.62} ${x + w * 0.95} ${y - h * 0.3} ${x} ${y}Z" fill="${fill}"/>`;
-const fire = (x, y, s) => flame(x, y, 34 * s, 14 * s, ACC) + flame(x + 1, y, 18 * s, 7 * s, OCHRE);
-const smoke = (pts) => pts.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${SMOKE}"/>`).join('');
+// Bold flat shapes, no hairlines: every scene has to stay an object at 300 px. Nothing is drawn that the row does not say.
 const burst = (cx, cy, r) => {
   let d = '';
   for (let i = 0; i < 16; i++) {
     const a = (i * Math.PI) / 8 - Math.PI / 2, rr = i % 2 ? r * 0.5 : r;
     d += (i ? 'L' : 'M') + (cx + rr * Math.cos(a)).toFixed(1) + ' ' + (cy + rr * Math.sin(a)).toFixed(1);
   }
-  return `<path d="${d}Z" fill="${ACC}"/><circle cx="${cx}" cy="${cy}" r="${(r * 0.32).toFixed(1)}" fill="${OCHRE}"/>`;
-};
-const windows = (x0, y0, cols, rows, dx, dy, w, h, skip = () => false) => {
-  let s = '';
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    if (!skip(c, r)) s += `<rect x="${x0 + c * dx}" y="${y0 + r * dy}" width="${w}" height="${h}" fill="${LIGHT}"/>`;
-  }
-  return s;
+  return `<path d="${d}Z" fill="${ACC}"/><circle cx="${cx}" cy="${cy}" r="${(r * 0.34).toFixed(1)}" fill="${OCHRE}"/>`;
 };
 const chip = (x, y, s, die = OCHRE) => {
   let pins = '';
   for (let i = 0; i < 4; i++) {
     const o = (12 + i * 20) * s;
-    pins += `M${x + o} ${y - 9 * s}v${9 * s}M${x + o} ${y + 84 * s}v${9 * s}M${x - 9 * s} ${y + o}h${9 * s}M${x + 84 * s} ${y + o}h${9 * s}`;
+    pins += `M${x + o} ${y - 10 * s}v${10 * s}M${x + o} ${y + 84 * s}v${10 * s}M${x - 10 * s} ${y + o}h${10 * s}M${x + 84 * s} ${y + o}h${10 * s}`;
   }
-  return `<path d="${pins}" stroke="${INK}" stroke-width="${5 * s}"/>` +
+  return `<path d="${pins}" stroke="${INK}" stroke-width="${7 * s}"/>` +
     `<rect x="${x}" y="${y}" width="${84 * s}" height="${84 * s}" rx="${7 * s}" fill="${INK}"/>` +
     `<rect x="${x + 22 * s}" y="${y + 22 * s}" width="${40 * s}" height="${40 * s}" fill="${die}"/>`;
 };
 const gavel = (x, y, s, a) =>
-  `<g transform="translate(${x} ${y}) rotate(${a}) scale(${s})">` +
-  `<rect x="-5" y="0" width="10" height="62" rx="4" fill="${INK}"/>` +
-  `<rect x="-26" y="-18" width="52" height="22" rx="5" fill="${INK}"/>` +
-  `<rect x="-30" y="-20" width="8" height="26" rx="3" fill="${INK}"/><rect x="22" y="-20" width="8" height="26" rx="3" fill="${INK}"/></g>`;
-const plane = (x, y, s, fill = INK) =>
-  `<g transform="translate(${x} ${y}) scale(${s})" fill="${fill}">` +
-  `<path d="M-40 -4H28C38 -4 44 0 44 0C44 0 38 4 28 4H-40Z"/><path d="M-4 -3L-22 -30H-12L12 -3ZM-4 3L-22 30H-12L12 3Z"/>` +
-  `<path d="M-38 -3L-46 -16H-39L-28 -3Z"/></g>`;
+  `<g transform="translate(${x} ${y}) rotate(${a}) scale(${s})" fill="${INK}">` +
+  `<rect x="-6" y="0" width="12" height="62" rx="4"/><rect x="-28" y="-20" width="56" height="26" rx="5"/>` +
+  `<rect x="-32" y="-23" width="9" height="32" rx="3"/><rect x="23" y="-23" width="9" height="32" rx="3"/></g>`;
 const person = (x, y, s, fill = INK) =>
   `<g transform="translate(${x} ${y}) scale(${s})" fill="${fill}"><circle cx="0" cy="-34" r="8"/>` +
   `<path d="M-10 -22H10L13 6H5L4 30H-4L-5 6H-13Z"/></g>`;
+const woman = (x, y, fill) =>
+  `<g transform="translate(${x} ${y})" fill="${fill}"><circle cx="0" cy="-23" r="5"/><path d="M-4 -16H4L9 4H-9Z"/>` +
+  `<rect x="-4" y="4" width="3" height="7"/><rect x="1" y="4" width="3" height="7"/></g>`;
+const star = (cx, cy, r, fill) => {
+  let d = '';
+  for (let i = 0; i < 10; i++) {
+    const a = (i * Math.PI) / 5 - Math.PI / 2, rr = i % 2 ? r * 0.45 : r;
+    d += (i ? 'L' : 'M') + (cx + rr * Math.cos(a)).toFixed(2) + ' ' + (cy + rr * Math.sin(a)).toFixed(2);
+  }
+  return `<path d="${d}Z" fill="${fill}"/>`;
+};
 const art = (vw, vh, bg, body) =>
-  `<svg viewBox="0 0 ${vw} ${vh}" preserveAspectRatio="xMidYMid meet"><rect width="${vw}" height="${vh}" fill="${bg}"/>${body}</svg>`;
+  `<svg viewBox="0 0 ${vw} ${vh}" preserveAspectRatio="xMidYMid slice"><rect width="${vw}" height="${vh}" fill="${bg}"/>${body}</svg>`;
 
-// ---- lead scenes (viewBox 320 x 112) ----------------------------------------------------------
+// ---- lead scenes (viewBox 236 x 112) ----------------------------------------------------------
 const LEAD_ART = {
-  // A tanker burning in the strait; the 40% fall is the reported figure. Mines are Iran's claim and are not drawn.
-  hormuz: () => art(320, 112, '#DCE6E4', `
-<path d="M0 0H86C70 12 54 16 30 18L0 20Z" fill="${OCHRE}"/><path d="M320 112H210C232 104 266 100 320 98Z" fill="${OCHRE}"/>
-<rect y="74" width="320" height="38" fill="${WATER}"/><path d="M210 112C232 104 266 100 320 98V112Z" fill="${OCHRE}"/>
-${smoke([[150, 26, 12], [168, 18, 14], [190, 14, 11], [134, 34, 9]])}
-<path d="M30 70H252L236 94H46Z" fill="${INK}"/>
-<rect x="44" y="40" width="34" height="30" fill="${INK}"/><rect x="50" y="30" width="12" height="12" fill="${INK}"/>
-${windows(49, 46, 3, 1, 9, 0, 6, 6)}
-<path d="M86 66H232" stroke="${INK}" stroke-width="4"/>
-${fire(126, 68, 1.05)}${fire(154, 68, 1.45)}${fire(184, 68, 1)}
-<path d="M234 10V40M224 30L234 42L244 30" fill="none" stroke="${ACC}" stroke-width="6" stroke-linejoin="round"/>
-<text x="282" y="40" class="fig">−40%</text>`),
+  // A tanker low in the water, burning amidships under heavy smoke; a second hull on the horizon. No mine is drawn:
+  // the mines are Iran's account (sources.md, row 1).
+  hormuz: () => art(236, 112, PANEL, `
+<rect y="72" width="236" height="40" fill="${SEA}"/>
+<path d="M0 98q10 -8 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0" fill="none" stroke="${LIGHT}" stroke-width="4"/>
+<path d="M178 64H230L226 74H182Z" fill="${MUTE}"/><rect x="180" y="54" width="10" height="10" fill="${MUTE}"/>
+<circle cx="70" cy="32" r="11" fill="${SMOKE}"/><circle cx="84" cy="20" r="15" fill="${MUTE}"/><circle cx="104" cy="14" r="16" fill="${SMOKE}"/>
+<circle cx="124" cy="10" r="15" fill="${MUTE}"/><circle cx="144" cy="8" r="12" fill="${SMOKE}"/><circle cx="160" cy="4" r="9" fill="${MUTE}"/>
+<path d="M92 66Q78 52 88 40Q90 50 96 50Q92 34 106 24Q104 40 114 44Q118 36 116 30Q130 44 122 66Z" fill="${ACC}"/>
+<path d="M98 66Q94 56 100 50Q104 56 108 54Q108 46 114 42Q120 54 116 66Z" fill="${OCHRE}"/>
+<rect x="16" y="40" width="26" height="24" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/><rect x="22" y="30" width="10" height="10" fill="${INK}"/>
+<path d="M20 48H38" stroke="${INK}" stroke-width="4"/>
+<path d="M6 64H170L160 84H16Z" fill="${INK}"/><path d="M48 62H84M128 62H162" stroke="${MUTE}" stroke-width="4"/>
+<ellipse cx="96" cy="88" rx="30" ry="4" fill="none" stroke="${LIGHT}" stroke-width="3"/><ellipse cx="96" cy="94" rx="46" ry="6" fill="none" stroke="${LIGHT}" stroke-width="3"/>`),
 
-  // A five-storey block with a broken top corner, and a house in ruins beside it (as Ukrainian officials described).
-  zaporizhzhia: () => art(320, 112, '#E4E0D6', `
-<rect y="100" width="320" height="12" fill="${SMOKE}"/>
-${smoke([[164, 30, 13], [182, 20, 15], [204, 14, 12], [224, 12, 9]])}
-<path d="M34 100V22H136L150 34L140 44L156 56V100Z" fill="${INK}"/>
-${windows(44, 30, 5, 5, 20, 14, 11, 8, (c, r) => c === 4 && r < 2)}
-${fire(146, 46, 1.1)}
-<path d="M196 100V74L226 54L256 74V100Z" fill="${INK}"/><path d="M188 76L226 48L240 58" fill="none" stroke="${PANEL}" stroke-width="5"/>
-<path d="M222 100L230 80L244 86L252 100Z" fill="${PANEL}"/>
-<path d="M262 100L272 88L284 96L298 86L306 100Z" fill="${INK}"/>`),
+  // A five-storey block with one floor punched out, smoke pouring from the hole, rubble and dust at its foot.
+  zaporizh: () => art(236, 112, PANEL, `
+<rect y="98" width="236" height="14" fill="${INK}"/>
+<rect x="66" y="16" width="104" height="82" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/>
+${[0, 1, 3, 4].flatMap((f) => [0, 1, 2, 3].map((c) => `<rect x="${76 + c * 22}" y="${22 + f * 16}" width="12" height="8" fill="${INK}"/>`)).join('')}
+<path d="M152 18L160 30L154 42L162 54L156 70L164 82L160 96H170V18Z" fill="${PANEL}"/>
+<path d="M152 18L160 30L154 42L162 54L156 70L164 82L160 96" fill="none" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
+<path d="M70 50L82 47L96 52L110 46L124 51L138 47L150 52L148 66L134 70L120 65L104 70L88 64L72 68Z" fill="${INK}"/>
+<circle cx="176" cy="44" r="11" fill="${MUTE}"/><circle cx="190" cy="30" r="14" fill="${INK}"/><circle cx="208" cy="18" r="15" fill="${MUTE}"/><circle cx="226" cy="8" r="12" fill="${INK}"/>
+<circle cx="40" cy="88" r="10" fill="${SMOKE}"/><circle cx="24" cy="92" r="8" fill="${SMOKE}"/><circle cx="210" cy="90" r="10" fill="${SMOKE}"/>
+<path d="M118 98L128 86L140 90L152 80L166 88L180 82L196 98Z" fill="${MUTE}"/>
+<rect x="134" y="84" width="10" height="7" fill="${OCHRE}" transform="rotate(-18 139 87)"/><rect x="170" y="86" width="12" height="6" fill="${OCHRE}" transform="rotate(14 176 89)"/>`),
 
-  // A chip, a value line climbing back, and a crate stopped at the border: Megaspeed on the export blacklist.
-  nvidia: () => art(320, 112, '#E3E7DF', `
-${chip(28, 20, 0.86)}
-<path d="M128 96H232" stroke="${INK}" stroke-width="3"/>
-<path d="M132 88L156 72L176 80L204 44L224 52" fill="none" stroke="${TEAL}" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M214 34L232 38L224 56Z" fill="${TEAL}"/>
-<rect x="248" y="50" width="52" height="44" fill="${OCHRE}"/><path d="M248 62H300M248 82H300" stroke="${INK}" stroke-width="3"/>
-<circle cx="274" cy="44" r="24" fill="none" stroke="${ACC}" stroke-width="7"/><path d="M257 27L291 61" stroke="${ACC}" stroke-width="7"/>`),
+  // A market board with a red line falling hard, beside a microchip: chip stocks slide.
+  nvidia: () => art(236, 112, PANEL, `
+<rect x="10" y="10" width="146" height="92" rx="6" fill="${INK}"/>
+<path d="M18 36H148M18 60H148M18 84H148" stroke="#394049" stroke-width="3"/>
+<path d="M22 26L44 34L60 28L82 58L100 50L124 80L136 84" fill="none" stroke="${ACC}" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M128 70L148 92L120 94Z" fill="${ACC}"/>
+${chip(172, 30, 0.6)}`),
+
+  // A tall tower over low buildings; a delta-wing drone on a dashed track, and the hit near the top.
+  riyadh: () => art(236, 112, PANEL, `
+<rect y="98" width="236" height="14" fill="${OCHRE}"/>
+<path d="M14 98V64H44V98ZM48 98V76H74V98ZM160 98V70H190V98ZM194 98V80H222V98Z" fill="${MUTE}"/>
+<path d="M90 98L98 10H126L134 98Z" fill="${INK}"/><path d="M104 10Q112 26 120 10Z" fill="${PANEL}"/>
+<path d="M102 40H122M101 54H123M100 68H124M99 82H125" stroke="${LIGHT}" stroke-width="4"/>
+<path d="M216 18L138 28" stroke="${ACC}" stroke-width="5" stroke-dasharray="9 7"/>
+<path d="M196 18L230 4L222 18L230 32Z" fill="${INK}"/>
+${burst(126, 28, 17)}`),
 };
 
-// ---- card spots (viewBox 180 x 60) ------------------------------------------------------------
+// ---- second-tier scenes (viewBox 88 x 78) -----------------------------------------------------
 const SPOT = {
-  // An air strike: a dashed fall from the sky onto a low row of buildings.
-  gaza: () => art(180, 60, '#E8E2D4', `
-<path d="M20 60V38H48V60ZM52 60V30H82V60ZM104 60V34H132V60ZM136 60V42H160V60Z" fill="${INK}"/>
-<path d="M150 4L104 34" stroke="${ACC}" stroke-width="4" stroke-dasharray="7 6"/>${burst(92, 34, 20)}`),
-  // A drone flying into a tall tower, the struck corner flashing.
-  riyadh: () => art(180, 60, '#E8E3D2', `
-<path d="M70 60V6H96V18L104 24L98 30V60Z" fill="${INK}"/>${windows(76, 34, 2, 3, 10, 8, 5, 4)}${burst(102, 22, 12)}
-<path d="M146 10L112 20" stroke="${ACC}" stroke-width="3" stroke-dasharray="6 5"/>
-<path d="M140 10L166 2L160 10L166 18Z" fill="${INK}"/>`),
+  // A low skyline with one building collapsed into a heap, smoke rising from it, debris in the air.
+  gaza: () => art(88, 78, PANEL, `
+<circle cx="46" cy="44" r="8" fill="${MUTE}"/><circle cx="54" cy="30" r="11" fill="${SMOKE}"/><circle cx="62" cy="14" r="10" fill="${SMOKE}"/>
+<rect x="4" y="42" width="18" height="28" fill="${INK}"/><rect x="22" y="52" width="14" height="18" fill="${MUTE}"/>
+<rect x="64" y="36" width="20" height="34" fill="${INK}"/><path d="M69 44H79M69 54H79" stroke="${LIGHT}" stroke-width="4"/>
+<path d="M36 70L40 58L48 62L54 52L62 62L64 70Z" fill="${MUTE}"/><rect x="38" y="56" width="22" height="5" fill="${INK}" transform="rotate(-24 49 58)"/>
+<rect x="30" y="40" width="5" height="5" fill="${INK}" transform="rotate(20 32 42)"/><rect x="66" y="26" width="4" height="4" fill="${INK}"/>
+<rect y="70" width="88" height="8" fill="${OCHRE}"/>`),
   // A gavel coming down on a microchip.
-  huawei: () => art(180, 60, '#E7E5DB', `
-<rect x="40" y="50" width="100" height="10" fill="${INK}"/>${chip(68, 22, 0.3)}${gavel(122, 18, 0.62, 48)}
-<path d="M88 8l-6-6M100 6V0M112 8l6-6" stroke="${ACC}" stroke-width="3"/>`),
-  // A sun over a thermometer at the top of its scale.
-  heat: () => art(180, 60, '#F0E2CE', `
-<circle cx="66" cy="30" r="17" fill="${ACC}"/>
-<path d="M66 4V9M66 51V56M40 30H45M87 30H92M48 12L52 16M84 12L80 16M48 48L52 44M84 48L80 44" stroke="${ACC}" stroke-width="4"/>
-<rect x="110" y="6" width="14" height="40" rx="7" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/>
-<rect x="114" y="12" width="6" height="34" fill="${ACC}"/><circle cx="117" cy="48" r="9" fill="${ACC}" stroke="${INK}" stroke-width="3"/>`),
-  // A plane flying home toward a calendar leaf: 16 December.
-  hasina: () => art(180, 60, '#E5E9E3', `
-<path d="M8 46C30 44 50 36 64 30" fill="none" stroke="${INK}" stroke-width="3" stroke-dasharray="5 5"/>${plane(88, 26, 0.62)}
-<rect x="122" y="6" width="44" height="50" rx="4" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/>
-<rect x="122" y="6" width="44" height="17" rx="3" fill="${ACC}"/>
-<text x="144" y="20" class="cal">DEC</text><text x="144" y="50" class="day">16</text>`),
-  // A supermarket front with a trolley sign, taped off.
-  cartagena: () => art(180, 60, '#ECE6D8', `
-<rect x="34" y="8" width="112" height="52" fill="${INK}"/>
-<path d="M34 8H146V20H34Z" fill="${ACC}"/><path d="M48 8V20M62 8V20M76 8V20M90 8V20M104 8V20M118 8V20M132 8V20" stroke="${LIGHT}" stroke-width="5"/>
-<rect x="46" y="26" width="46" height="26" fill="${LIGHT}"/>
-<path d="M50 31H56L61 44H83L86 34H58" fill="none" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
-<circle cx="64" cy="48" r="2.6" fill="${INK}"/><circle cx="80" cy="48" r="2.6" fill="${INK}"/>
-<rect x="100" y="26" width="34" height="34" fill="${SMOKE}"/>
-<path d="M10 52L170 40" stroke="${OCHRE}" stroke-width="7"/><path d="M24 51L30 50M48 49L54 48M72 47L78 47M96 45L102 45M120 44L126 43M144 42L150 41" stroke="${INK}" stroke-width="7"/>`),
-  // The Cup of Nations trophy beside a ball.
-  senegal: () => art(180, 60, '#E9E4D2', `
-<path d="M70 4H110C110 26 100 36 90 36C80 36 70 26 70 4Z" fill="${OCHRE}"/>
-<path d="M70 9H60C60 20 66 25 74 26M110 9H120C120 20 114 25 106 26" fill="none" stroke="${OCHRE}" stroke-width="4"/>
-<rect x="86" y="36" width="8" height="10" fill="${OCHRE}"/><rect x="74" y="46" width="32" height="10" rx="2" fill="${INK}"/>
-<circle cx="138" cy="42" r="14" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/>
-<path d="M138 35L145 40L142 48H134L131 40Z" fill="${INK}"/>`),
-  // A pumpjack over the field.
-  iraq: () => art(180, 60, '#E9E3D3', `
-<rect y="54" width="180" height="6" fill="${OCHRE}"/>
-<path d="M62 54L76 22L90 54" fill="none" stroke="${INK}" stroke-width="6" stroke-linejoin="round"/>
-<path d="M44 26L118 14" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
-<path d="M112 6C124 6 128 14 126 24L114 26Z" fill="${INK}"/><path d="M120 26V54" stroke="${INK}" stroke-width="3"/>
-<circle cx="76" cy="21" r="5" fill="${ACC}"/><rect x="36" y="38" width="20" height="16" fill="${INK}"/>
-<path d="M146 22C146 22 136 36 136 42A10 10 0 0 0 156 42C156 36 146 22 146 22Z" fill="${INK}"/>`),
-  // People sent back across a border.
-  rohingya: () => art(180, 60, '#DFE7E6', `
-<path d="M40 2V60" stroke="${INK}" stroke-width="3" stroke-dasharray="6 5"/>
-${person(78, 30, 0.82)}${person(104, 30, 0.82)}${person(130, 30, 0.82)}
-<path d="M168 10H62" stroke="${ACC}" stroke-width="6"/><path d="M50 10L66 2V18Z" fill="${ACC}"/>`),
-  // A phone carrying the fine: up to 5% of global revenue.
-  australia: () => art(180, 60, '#ECE7D8', `
-<rect x="64" y="2" width="38" height="58" rx="6" fill="${INK}"/><rect x="69" y="10" width="28" height="42" fill="${LIGHT}"/>
-<text x="83" y="38" class="pct">5%</text>
-<ellipse cx="128" cy="50" rx="16" ry="5" fill="${OCHRE}" stroke="${INK}" stroke-width="2"/>
-<ellipse cx="128" cy="42" rx="16" ry="5" fill="${OCHRE}" stroke="${INK}" stroke-width="2"/>
-<ellipse cx="128" cy="34" rx="16" ry="5" fill="${OCHRE}" stroke="${INK}" stroke-width="2"/>`),
+  huawei: () => art(88, 78, PANEL, `
+<rect x="6" y="68" width="76" height="10" fill="${INK}"/>${chip(14, 40, 0.3)}${gavel(58, 22, 0.55, 40)}
+<path d="M36 22l-6-6M46 18V10M56 22l6-6" stroke="${ACC}" stroke-width="4"/>`),
+  // A blazing sun, a thermometer filled red to the top, heat shimmer over the ground.
+  heat: () => art(88, 78, PANEL, `
+<path d="M28 2V8M28 44V50M4 26H10M46 26H52M11 9L15 13M41 39L45 43M11 43L15 39M41 13L45 9" stroke="${OCHRE}" stroke-width="4" stroke-linecap="round"/>
+<circle cx="28" cy="26" r="13" fill="${OCHRE}"/>
+<path d="M4 62q5 -6 10 0t10 0t10 0t10 0M4 72q5 -6 10 0t10 0t10 0t10 0" fill="none" stroke="${ACC}" stroke-width="3.5"/>
+<rect x="60" y="6" width="16" height="56" rx="8" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/>
+<rect x="64" y="12" width="8" height="54" rx="4" fill="${ACC}"/>
+<circle cx="68" cy="64" r="11" fill="${ACC}" stroke="${INK}" stroke-width="3"/>
+<path d="M78 18H84M78 30H84M78 42H84" stroke="${INK}" stroke-width="3"/>`),
+  // A jet climbing away on motion dashes, and a calendar with one date marked.
+  hasina: () => art(88, 78, PANEL, `
+<path d="M4 74L22 62M2 62L16 53M12 77L28 67" stroke="${MUTE}" stroke-width="3" stroke-linecap="round" stroke-dasharray="6 4"/>
+<g transform="translate(36 48) rotate(-30)" fill="${INK}">
+<path d="M-26 -4H16Q28 -4 30 0Q28 4 16 4H-26Z"/><path d="M-4 -3L-14 -24H-7L10 -3ZM-4 3L-14 24H-7L10 3Z"/><path d="M-26 -3L-32 -12H-26L-18 -3ZM-26 3L-32 12H-26L-18 3Z"/></g>
+<rect x="56" y="6" width="28" height="28" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/><rect x="56" y="6" width="28" height="8" fill="${ACC}"/>
+<path d="M62 3V9M78 3V9" stroke="${INK}" stroke-width="3"/>
+<path d="M62 20h3M69 20h3M76 20h3M62 27h3M69 27h3" stroke="${INK}" stroke-width="3"/><rect x="75" y="24" width="6" height="6" fill="${ACC}"/>`),
+  // A supermarket front, trolley sign in the window, people walking out of the open door.
+  market: () => art(88, 78, PANEL, `
+<rect x="4" y="8" width="80" height="62" fill="${INK}"/>
+<path d="M4 8H84V22H4Z" fill="${ACC}"/><path d="M14 8V22M28 8V22M42 8V22M56 8V22M70 8V22" stroke="${LIGHT}" stroke-width="6"/>
+<rect x="10" y="28" width="34" height="24" fill="${LIGHT}"/>
+<path d="M13 32H18L22 44H38L41 35H20" fill="none" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="24" cy="48" r="2.5" fill="${INK}"/><circle cx="36" cy="48" r="2.5" fill="${INK}"/>
+<rect x="52" y="30" width="26" height="40" fill="${LIGHT}"/>
+<rect y="70" width="88" height="8" fill="${MUTE}"/>
+${person(58, 52, 0.6, OCHRE)}${person(72, 54, 0.6, OCHRE)}`),
+  // A silver cup with two handles on a black base, stars around it.
+  trophy: () => art(88, 78, PANEL, `
+<path d="M28 16H16Q14 34 32 38M60 16H72Q74 34 56 38" fill="none" stroke="${INK}" stroke-width="4"/>
+<path d="M26 8H62V26Q62 46 44 48Q26 46 26 26Z" fill="${SMOKE}" stroke="${INK}" stroke-width="3"/>
+<path d="M33 14V30" stroke="${LIGHT}" stroke-width="4" stroke-linecap="round"/>
+<rect x="40" y="48" width="8" height="10" fill="${SMOKE}" stroke="${INK}" stroke-width="3"/>
+<rect x="28" y="58" width="32" height="8" fill="${INK}"/><rect x="22" y="66" width="44" height="8" fill="${INK}"/>
+${star(12, 10, 8, OCHRE)}${star(78, 52, 7, OCHRE)}${star(76, 8, 5, OCHRE)}`),
+  // An oil derrick on the horizon, piped to two storage tanks.
+  oil: () => art(88, 78, PANEL, `
+<rect y="64" width="88" height="14" fill="${OCHRE}"/>
+<path d="M14 64L26 6L38 64M18 46H34M21 30H31M17 54L33 38M19 38L31 22" fill="none" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M36 58H84" stroke="${MUTE}" stroke-width="5"/>
+<rect x="46" y="36" width="16" height="28" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/><rect x="66" y="30" width="18" height="34" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/>
+<path d="M46 46H62M66 42H84" stroke="${ACC}" stroke-width="4"/>`),
+  // A screen with a big percent sign, and a red penalty bar under it.
+  fine: () => art(88, 78, PANEL, `
+<rect x="6" y="6" width="76" height="54" rx="4" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/>
+<path d="M6 10Q6 6 10 6H78Q82 6 82 10V16H6Z" fill="${INK}"/><circle cx="13" cy="11" r="2" fill="${LIGHT}"/><circle cx="20" cy="11" r="2" fill="${LIGHT}"/>
+<circle cx="32" cy="28" r="6" fill="none" stroke="${INK}" stroke-width="5"/><circle cx="56" cy="47" r="6" fill="none" stroke="${INK}" stroke-width="5"/>
+<path d="M60 22L28 54" stroke="${ACC}" stroke-width="6" stroke-linecap="round"/>
+<rect x="6" y="66" width="76" height="10" fill="${LIGHT}" stroke="${INK}" stroke-width="3"/><rect x="8" y="68" width="30" height="6" fill="${ACC}"/>`),
 };
 
 // ---- stories ----------------------------------------------------------------------------------
-// conf: CONFIRMED (in the record from an authority) / OFFICIAL (an official statement) /
-//       REPORTED (carried by the outlets named) / CLAIM (one side's account, unverified).
-// region feeds the tally; loc places the map pin (stories with no single place have none).
+// src: the row in design/sources.md. fig: the one figure the card leads with.
+// loc: where the pin goes; stories with no single place (src 28-32) have none.
 const LEAD = [
-  { art: 'hormuz', loc: [56.3, 26.5], region: 'Middle East', place: 'Strait of Hormuz', conf: 'REPORTED',
-    hd: 'Hormuz oil traffic down 40% as tanker attacks rise',
-    dk: 'Iran says three ships hit mines and caught fire, as the US‑Israel war on Iran goes on.' },
-  { art: 'zaporizhzhia', loc: [35.14, 47.84], region: 'Europe', place: 'Zaporizhzhia, Ukraine', conf: 'OFFICIAL',
-    hd: 'Russian strike on Zaporizhzhia kills 2, injures 44',
-    dk: 'A house destroyed and a five‑storey apartment block hit, Ukrainian officials said.' },
-  { art: 'nvidia', loc: [-121.96, 37.35], region: 'Americas', place: 'United States · tech', conf: 'CONFIRMED',
-    hd: 'Huang back as Nvidia CEO; US blacklists Megaspeed',
-    dk: 'Nvidia regains $952bn in value; the firm at the centre of its spy scandal goes on the export list.' },
+  { src: 1, art: 'hormuz', loc: [56.4, 26.6], region: 'Middle East', place: 'Strait of Hormuz',
+    fig: '−40%', hd: 'Oil traffic through Hormuz falls 40% as tanker attacks mount' },
+  { src: 2, art: 'zaporizh', loc: [35.14, 47.84], region: 'Europe', place: 'Zaporizhzhia',
+    fig: '2 killed', hd: 'Russian strike kills two and injures 44 in Zaporizhzhia' },
+  { src: 3, art: 'nvidia', loc: [-74.0, 40.71], region: 'Americas', place: 'New York',
+    fig: '$952bn', hd: 'Nvidia regains $952bn as Huang returns; Megaspeed blacklisted' },
+  { src: 5, art: 'riyadh', loc: [46.68, 24.71], region: 'Middle East', place: 'Riyadh, Saudi Arabia',
+    fig: '11 injured', hd: 'Houthi drone hits a tower in Riyadh’s financial district' },
 ];
 const CARDS = [
-  { art: 'gaza', loc: [34.45, 31.5], region: 'Middle East', place: 'Gaza', conf: 'REPORTED',
-    hd: 'Israeli strike kills senior Hamas official', dk: 'Naim Abu Nahl, 50; four others wounded' },
-  { art: 'riyadh', loc: [46.68, 24.71], region: 'Middle East', place: 'Riyadh', conf: 'OFFICIAL',
-    hd: 'Houthi drone hits tower, injuring 11', dk: 'Financial district, says Saudi civil defence' },
-  { art: 'huawei', loc: [-73.95, 40.65], region: 'Americas', place: 'US', conf: 'CONFIRMED',
-    hd: 'Huawei guilty of trade‑secrets conspiracy', dk: 'And fraud; jury clears it of racketeering' },
-  { art: 'heat', loc: [-0.12, 51.5], region: 'Europe', place: 'UK', conf: 'OFFICIAL',
-    hd: 'Record 5,258 heat deaths this summer', dk: 'UK Health Security Agency estimate' },
-  { art: 'hasina', loc: [90.4, 23.8], region: 'Asia', place: 'Bangladesh', conf: 'CLAIM',
-    hd: 'Hasina plans return from exile on 16 Dec', dk: 'Dhaka: she can return only by extradition' },
-  { art: 'cartagena', loc: [-75.5, 10.4], region: 'Americas', place: 'Colombia', conf: 'REPORTED',
-    hd: 'Armed men hold 25 hostages in supermarket', dk: 'Cartagena; police and army deployed' },
-  { art: 'senegal', loc: [-17.45, 14.7], region: 'Africa', place: 'AFCON', conf: 'CONFIRMED',
-    hd: 'Senegal reinstated as AFCON 2025 winners', dk: 'Sport court rules against Morocco' },
-  { art: 'iraq', loc: [44.0, 36.19], region: 'Middle East', place: 'Iraq', conf: 'OFFICIAL',
-    hd: 'Baghdad orders takeover of Kurdish oilfields', dk: 'PM also orders region’s crossings seized' },
-  { art: 'rohingya', loc: [101.7, 3.14], region: 'Asia', place: 'Malaysia', conf: 'OFFICIAL',
-    hd: 'Thousands of Rohingya to be sent to Myanmar', dk: 'Five days after ICJ genocide ruling' },
-  { art: 'australia', loc: [149.13, -35.28], region: 'Oceania', place: 'Australia', conf: 'OFFICIAL',
-    hd: 'Tech giants face fines up to 5% of revenue', dk: 'Online‑harm bill expected to pass this week' },
+  { src: 4, art: 'gaza', loc: [34.45, 31.5], region: 'Middle East', place: 'Gaza',
+    fig: '50', hd: 'Israeli strike kills a senior Hamas official in Gaza' },
+  { src: 6, art: 'huawei', loc: [-74.0, 40.71], region: 'Americas', place: 'New York',
+    fig: 'Guilty', hd: 'US jury convicts Huawei of trade-secrets conspiracy and fraud' },
+  { src: 7, art: 'heat', loc: [-0.13, 51.5], region: 'Europe', place: 'United Kingdom',
+    fig: '5,258', hd: 'Record 5,258 heat deaths in the UK this summer' },
+  { src: 8, art: 'hasina', loc: [90.4, 23.8], region: 'Asia', place: 'Dhaka, Bangladesh',
+    fig: '16 Dec', hd: 'Hasina plans a return from exile; Dhaka demands extradition' },
+  { src: 9, art: 'market', loc: [-75.5, 10.4], region: 'Americas', place: 'Cartagena, Colombia',
+    fig: '25 held', hd: 'Armed men hold 25 hostages in a Cartagena supermarket' },
+  { src: 10, art: 'trophy', loc: [-17.45, 14.7], region: 'Africa', place: 'Dakar, Senegal',
+    fig: 'AFCON', hd: 'Court reinstates Senegal as 2025 Africa Cup winners' },
+  { src: 11, art: 'oil', loc: [44.4, 33.3], region: 'Middle East', place: 'Baghdad, Iraq',
+    fig: 'Takeover', hd: 'Iraq orders takeover of Kurdish-held oilfields and crossings' },
+  { src: 13, art: 'fine', loc: [149.13, -35.28], region: 'Oceania', place: 'Canberra, Australia',
+    fig: 'Up to 5%', hd: 'Australia warns tech giants of fines up to 5% of global revenue' },
 ];
+// Grouped by region in legend order, so the chip colours run in blocks down the columns.
 const DIGEST = [
-  { loc: [34.45, 31.5], region: 'Middle East', place: 'Gaza', hd: 'strikes kill 7; meningitis cases up 8×' },
-  { loc: [37.6, 55.75], region: 'Europe', place: 'Russia', hd: 'Putin vows retaliation for oil strikes' },
-  { loc: [30.52, 39.78], region: 'Europe', place: 'Türkiye', hd: 'army helicopter crash kills five' },
-  { loc: [10.75, 59.9], region: 'Europe', place: 'Norway', hd: 'Cameroon separatist denies war crimes' },
-  { loc: [-77.04, 38.9], region: 'Americas', place: 'US', hd: 'Trump urges faster federal executions' },
-  { loc: [-107.4, 24.8], region: 'Americas', place: 'Mexico', hd: 'to try ‘El Chapo Isidro’ despite US request' },
-  { loc: [-82.36, 23.1], region: 'Americas', place: 'Cuba', hd: 'WHO chief visits as health care falters' },
-  { loc: [-72.34, 18.54], region: 'Americas', place: 'Haiti', hd: 'Bukele details Salvadoran troop deaths' },
-  { loc: [30.25, 1.56], region: 'Africa', place: 'DR Congo', hd: 'rebels halt advance on Bunia' },
-  { loc: [13.15, 11.85], region: 'Africa', place: 'Nigeria', hd: 'Borno school enrolment nearly doubles' },
-  { loc: [28.05, -26.2], region: 'Africa', place: 'S Africa', hd: 'Zimbabwean guilty over Russia bid' },
-  { loc: [105.83, 21.0], region: 'Asia', place: 'Hanoi', hd: 'restaurant blast kills at least six' },
-  { loc: [126.98, 37.57], region: 'Asia', place: 'S Korea', hd: 'air‑raid alert as Russian jets near' },
-  { loc: [113.26, 23.13], region: 'Asia', place: 'China', hd: 'airline unit to buy 50 Boeing 737s' },
-  { region: 'Sport', place: 'Football', hd: 'Arsenal 1‑1 Dortmund; Real 5‑1 PSV' },
-  { region: 'Sport', place: 'Cricket', hd: 'Sooryavanshi, 15, hits 204 off 53 balls' },
-  { region: 'Worldwide', place: 'WFP', hd: 'wars put food aid for 7.3 million at risk' },
-  { region: 'Worldwide', place: 'UN Women', hd: '5 an hour killed by partner or kin' },
-  { region: 'Worldwide', place: 'UN', hd: 'Guterres wants AI oversight deal in a year' },
+  // Asia
+  { src: 12, loc: [101.7, 3.14],  region: 'Asia',        hd: 'Malaysia to send Rohingya back' },
+  { src: 25, loc: [105.85, 21.03], region: 'Asia',       hd: 'Hanoi restaurant blast kills at least six' },
+  { src: 26, loc: [126.98, 37.57], region: 'Asia',       hd: 'S Korea air-raid alert over Russian jets' },
+  { src: 27, loc: [113.26, 23.13], region: 'Asia',       hd: 'China Southern unit to buy 50 737-8s' },
+  // Americas
+  { src: 18, loc: [-77.04, 38.9],  region: 'Americas',   hd: 'Trump urges faster federal executions' },
+  { src: 19, loc: [-99.13, 19.43], region: 'Americas',   hd: 'Mexico, not US, to try El Chapo Isidro' },
+  { src: 20, loc: [-82.36, 23.1],  region: 'Americas',   hd: 'WHO chief visits Cuba as care falters' },
+  { src: 21, loc: [-72.34, 18.54], region: 'Americas',   hd: 'Bukele details troop deaths in Haiti' },
+  // Europe
+  { src: 15, loc: [37.6, 55.75],   region: 'Europe',     hd: 'Putin vows retaliation for oil-plant hits' },
+  { src: 17, loc: [10.75, 59.91],  region: 'Europe',     hd: 'Cameroon rebel denies war crimes' },
+  // Middle East
+  { src: 14, loc: [34.45, 31.5],   region: 'Middle East', hd: 'Gaza: 7 killed; 272 meningitis cases' },
+  { src: 16, loc: [30.52, 39.78],  region: 'Middle East', hd: 'Türkiye military helicopter crash kills 5' },
+  // Africa
+  { src: 22, loc: [29.4, 1.6],     region: 'Africa',     hd: 'CRP rebels halt their advance on Bunia' },
+  { src: 23, loc: [13.15, 11.85],  region: 'Africa',     hd: 'Borno school rolls nearly double' },
+  { src: 24, loc: [28.05, -26.2],  region: 'Africa',     hd: 'S Africa convicts Russia army hopeful' },
+  // World (no single place: no `loc`, no pin, ink chip)
+  { src: 28, region: 'World', hd: 'Arsenal 1-1 Dortmund; Real 5-1 PSV' },
+  { src: 29, region: 'World', hd: 'Sooryavanshi, 15, hits 204 off 53 balls' },
+  { src: 30, region: 'World', hd: 'WFP: wars imperil food aid for 7.3m' },
+  { src: 31, region: 'World', hd: 'UN: partners, kin kill 5 women an hour' },
+  { src: 32, region: 'World', hd: 'Guterres: AI oversight deal in a year' },
 ];
 // Numbering is assigned here, in reading order, so no literal can drift out of sync.
 const ALL = [...LEAD, ...CARDS, ...DIGEST];
 ALL.forEach((s, i) => { s.n = i + 1; });
 const FEATURED = LEAD.length + CARDS.length;
-const REGION_ORDER = ['Europe', 'Middle East', 'Americas', 'Asia', 'Africa', 'Oceania', 'Sport', 'Worldwide'];
-const tally = REGION_ORDER.map((r) => [r, ALL.filter((s) => s.region === r).length]).filter(([, c]) => c);
-if (tally.reduce((a, [, c]) => a + c, 0) !== ALL.length) throw new Error('a story has no region in REGION_ORDER');
+const srcs = ALL.map((s) => s.src).sort((a, b) => a - b);
+if (srcs.length !== 32 || srcs.some((v, i) => v !== i + 1)) throw new Error('every sources.md row must appear exactly once');
+for (const s of ALL) if (!REGION[s.region] && s.region !== 'World') throw new Error('unknown region ' + s.region);
+const tally = REGION_ORDER.map((r) => [r, ALL.filter((s) => s.region === r).length]);
+const color = (s) => REGION[s.region] ?? WORLD;
+const byRow = Object.fromEntries(ALL.map((s) => [s.src, s]));
 
 // ---- map pins ---------------------------------------------------------------------------------
-// Featured stories get a numbered red pin; off:[dx, dy] moves a crowded pin and draws a tick back to the place.
-const PIN_OFF = { 1: [12, 6], 2: [2, -12], 3: [8, 0], 4: [-14, 4], 5: [-4, 14], 11: [12, -6], 7: [-6, -6], 6: [10, -2], 9: [2, 8], 8: [4, -6] };
+// Featured stories get a numbered pin in their region colour; off:[dx, dy] moves a crowded pin and draws a tick back.
+const PIN_OFF = { 1: [11, 0], 2: [0, -7], 3: [-11, 0], 4: [-1, 10], 5: [-11, 0], 6: [11, 0], 11: [1, -3] };
 const PIN = 18, PH = PIN / 2;
 const f1 = (v) => +v.toFixed(1);
 const geo = { pins: [] };
@@ -284,140 +305,139 @@ let dots = '', ticks = '', pins = '';
 for (const s of DIGEST) {
   if (!s.loc) continue;
   const [x, y] = px(...s.loc).map(f1);
-  dots += `<circle class="dot" cx="${x}" cy="${y}" r="3.2"/>`;
+  dots += `<circle cx="${x}" cy="${y}" r="3.6" fill="${color(s)}" stroke="#fff" stroke-width="1"/>`;
 }
 for (const s of [...LEAD, ...CARDS]) {
+  if (!s.loc) continue;
   const [x, y] = px(...s.loc).map(f1);
   const [dx, dy] = PIN_OFF[s.n] ?? [0, 0];
   const X = f1(x + dx), Y = f1(y + dy);
-  if (dx || dy) ticks += `<path class="tk" d="M${x} ${y}L${X} ${Y}"/><circle class="ae" cx="${x}" cy="${y}" r="2.4"/>`;
-  pins += `<g transform="translate(${X} ${Y})"><rect class="pr" x="${-PH}" y="${-PH}" width="${PIN}" height="${PIN}" rx="4"/><text class="pn" y="5">${s.n}</text></g>`;
+  if (dx || dy) ticks += `<path d="M${x} ${y}L${X} ${Y}" stroke="${INK}" stroke-width="2"/>`;
+  pins += `<g transform="translate(${X} ${Y})"><rect x="${-PH}" y="${-PH}" width="${PIN}" height="${PIN}" rx="4" fill="${color(s)}" stroke="#fff" stroke-width="1.5"/><text class="pn" y="5.5">${s.n}</text></g>`;
   geo.pins.push({ n: s.n, x: X, y: Y });
 }
 
 // ---- render -----------------------------------------------------------------------------------
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const conf = (c) => `<span class="cf ${c.toLowerCase()}"><i>${c}</i></span>`;
-const num = (n) => `<span class="nb"><i>${n}</i></span>`;
-const kicker = (s) => `<div class="kick">${num(s.n)}<span class="pc">${esc(s.place)}</span>${conf(s.conf)}</div>`;
+const num = (s) => `<span class="nb" style="background:${color(s)}"><i>${s.n}</i></span>`;
+const kicker = (s) => `<div class="kick">${num(s)}<span class="pc">${esc(s.place)}</span></div>`;
 
 const leads = LEAD.map((s) => `
-<article class="lead">${LEAD_ART[s.art]()}${kicker(s)}<h2 class="hd">${esc(s.hd)}</h2><p class="dk">${esc(s.dk)}</p></article>`).join('');
+<article class="lead">${kicker(s)}${LEAD_ART[s.art]()}<div class="fig">${esc(s.fig)}</div><h2 class="hd">${esc(s.hd)}</h2></article>`).join('');
 const cards = CARDS.map((s) => `
-<article class="card">${SPOT[s.art]()}${kicker(s)}<h3 class="h3">${esc(s.hd)}</h3><p class="dk">${esc(s.dk)}</p></article>`).join('');
+<article class="card">${kicker(s)}<div class="cb">${SPOT[s.art]()}<div class="tx"><div class="fig2">${esc(s.fig)}</div><h3 class="h3">${esc(s.hd)}</h3></div></div></article>`).join('');
 const digest = DIGEST.map((s) => `
-<li>${num(s.n)}<span class="di"><b>${esc(s.place)}:</b> ${esc(s.hd)}</span></li>`).join('');
-const tallyHtml = tally.map(([r, c]) => `<span class="rg"><b><i>${c}</i></b><span>${r}</span></span>`).join('');
-
-const graticule = [];
-for (let lon = -120; lon <= 150; lon += 30) { const [x] = px(lon, 0); graticule.push(`M${x.toFixed(1)} 0V${MAP_H}`); }
-for (const lat of [-30, 0, 30, 60]) { const [, y] = px(0, lat); graticule.push(`M0 ${y.toFixed(1)}H${MAP_W}`); }
+<li>${num(s)}<span class="di">${esc(s.hd)}</span></li>`).join('');
+const worldN = ALL.filter((s) => s.region === 'World').length;
+// The unpinned rows close the digest, so the map note can give them as one range.
+const unpinned = ALL.filter((s) => !s.loc).map((s) => s.n);
+if (unpinned.some((n, i) => n !== ALL.length - unpinned.length + 1 + i)) throw new Error('unpinned stories must close the digest');
+const legend = [...tally, ...(worldN ? [['World', worldN]] : [])]
+  .map(([r, c]) => `<span class="lg"><b style="background:${REGION[r] ?? WORLD}"></b>${r} ${c}</span>`).join('');
+const teaser = (row, text) => `<span class="ts">${num(byRow[row])}<span>${esc(text)}</span></span>`;
 
 // Layout checker (CHECK=1 only): measures the laid-out page, writes a JSON report into document.title.
 const checker = !process.env.CHECK ? '' : `<script>try{
 const out=[],G=${JSON.stringify(geo)},R=${PH};
-const over=(e,tag)=>{if(e.scrollHeight>e.clientHeight+1||e.scrollWidth>e.clientWidth+1)out.push(tag+' overflows '+(e.scrollWidth-e.clientWidth)+'x'+(e.scrollHeight-e.clientHeight)+': '+e.textContent.slice(0,50))};
-document.querySelectorAll('.lead,.card,.digest,.foot div,.deck,.tally').forEach(e=>over(e,e.className));
-document.querySelectorAll('.di').forEach(e=>{const r=e.getBoundingClientRect(),q=e.closest('.digest').getBoundingClientRect(),c=e.closest('li').getBoundingClientRect();(r.right>c.right+.5||r.right>q.right+.5)&&out.push('digest item too wide by '+Math.round(r.right-c.right)+': '+e.textContent)});
-document.querySelectorAll('.pc').forEach(e=>e.scrollWidth>e.clientWidth+1&&out.push('kicker clips: '+e.textContent));
-document.querySelectorAll('.di').forEach(e=>{const n=Math.round(e.offsetHeight/parseFloat(getComputedStyle(e).lineHeight));n>1&&out.push('digest wraps '+n+': '+e.textContent)});
-document.querySelectorAll('.hd,.h3,.dk').forEach(e=>{const n=Math.round(e.offsetHeight/parseFloat(getComputedStyle(e).lineHeight));n>2&&out.push(e.className+' '+n+' lines: '+e.textContent)});
-const bands=[...document.querySelectorAll('.band')].map(e=>[e.dataset.b,e.getBoundingClientRect()]);
-bands.forEach(([a,r],i)=>{bands.slice(i+1).forEach(([b,q])=>{if(r.bottom>q.top+.5&&q.bottom>r.top+.5&&r.right>q.left&&q.right>r.left)out.push('bands '+a+'/'+b+' overlap')});if(r.bottom>1024)out.push(a+' off page')});
-bands.forEach(([a,r])=>{const e=document.querySelector('[data-b="'+a+'"]');const k=[...e.querySelectorAll('*')].reduce((m,c)=>Math.max(m,c.getBoundingClientRect().bottom),0);out.push('slack '+a+' '+Math.round(r.bottom-k))});
-G.pins.forEach((a,i)=>G.pins.slice(i+1).forEach(b=>Math.abs(a.x-b.x)<2*R+2&&Math.abs(a.y-b.y)<2*R+2&&out.push('pins '+a.n+'/'+b.n)));
-G.pins.forEach(p=>(p.x<R||p.y<R||p.x>${MAP_W}-R||p.y>${MAP_H}-R)&&out.push('pin '+p.n+' off map'));
-const sz=new Set();document.querySelectorAll('body *:not(script)').forEach(e=>{if([...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim()))sz.add(parseFloat(getComputedStyle(e).fontSize))});
-out.push('font sizes '+[...sz].sort((a,b)=>a-b).join(','));
+const html=[...document.querySelectorAll('body *')].filter(e=>!e.closest('svg')&&e.tagName!=='SCRIPT');
+const trimmed=(e)=>getComputedStyle(e).textBoxTrim!=='none'||[...e.querySelectorAll('*')].some(c=>getComputedStyle(c).textBoxTrim!=='none');
+html.forEach(e=>{if(!e.clientWidth&&!e.clientHeight)return;const cs=getComputedStyle(e),dx=e.scrollWidth-e.clientWidth,dy=cs.overflow!=='visible'&&!trimmed(e)?e.scrollHeight-e.clientHeight:0;if(dx>1||dy>1)out.push('CLIP '+(e.className||e.tagName)+' '+dx+'x'+dy+': '+e.textContent.trim().slice(0,48))});
+document.querySelectorAll('.lead,.card,.tx,.map,.also,.legend').forEach(e=>{const r=e.getBoundingClientRect();e.querySelectorAll('*').forEach(c=>{if(c.closest('svg')&&c.tagName!=='svg')return;const q=c.getBoundingClientRect();if(q.height&&(q.bottom>r.bottom+.5||q.right>r.right+.5))out.push('CLIP '+e.className+' child past edge: '+c.textContent.trim().slice(0,40))})});
+const lines=(e)=>Math.round(e.getBoundingClientRect().height/parseFloat(getComputedStyle(e).lineHeight));
+document.querySelectorAll('.hd').forEach(e=>lines(e)>3&&out.push('CLIP lead headline '+lines(e)+' lines: '+e.textContent));
+document.querySelectorAll('.h3').forEach(e=>lines(e)>3&&out.push('CLIP card headline '+lines(e)+' lines: '+e.textContent));
+document.querySelectorAll('.di,.fig,.fig2').forEach(e=>lines(e)>1&&out.push('CLIP wraps: '+e.textContent));
+const bands=[...document.querySelectorAll('[data-b]')].map(e=>[e.dataset.b,e,e.getBoundingClientRect()]);
+bands.forEach(([a,,r],i)=>{bands.slice(i+1).forEach(([b,,q])=>{if(r.bottom>q.top+.5&&q.bottom>r.top+.5)out.push('OVERLAP bands '+a+'/'+b)});if(r.bottom>1024.5||r.right>1024.5)out.push('OFF PAGE '+a)});
+const slack=bands.map(([a,e,r])=>{const k=[...e.querySelectorAll('*')].filter(c=>!c.closest('svg')||c.tagName==='svg').reduce((m,c)=>Math.max(m,c.getBoundingClientRect().bottom),0);return a+' '+Math.round(r.bottom-k)});
+out.push('band slack: '+slack.join(' | '));
+bands.forEach(([a,e,r])=>e.querySelectorAll('*').forEach(c=>{if(c.closest('svg')&&c.tagName!=='svg')return;const q=c.getBoundingClientRect();if(q.bottom>r.bottom+.5)out.push('OFF BAND '+a+' by '+Math.round(q.bottom-r.bottom)+': '+((c.className.baseVal??c.className)||c.tagName)+' '+c.textContent.trim().slice(0,30))}));
+const room=(sel)=>{let mn=1e9;document.querySelectorAll(sel).forEach(e=>{const b=e.getBoundingClientRect().bottom,k=[...e.children].reduce((m,c)=>Math.max(m,c.getBoundingClientRect().bottom),0);mn=Math.min(mn,b-k)});return Math.round(mn)};
+out.push('inner room (min, px): lead '+room('.lead')+' | card text '+room('.tx')+' | map col '+room('.map')+' | digest col '+room('.also'));
+G.pins.forEach((a,i)=>G.pins.slice(i+1).forEach(b=>Math.abs(a.x-b.x)<2*R+1&&Math.abs(a.y-b.y)<2*R+1&&out.push('PINS overlap '+a.n+'/'+b.n)));
+G.pins.forEach(p=>(p.x<R||p.y<R||p.x>${MAP_W}-R||p.y>${MAP_H}-R)&&out.push('PIN off map '+p.n));
+const sz=new Set();html.forEach(e=>{if([...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim()))sz.add(parseFloat(getComputedStyle(e).fontSize))});
+document.querySelectorAll('svg text').forEach(e=>sz.add(parseFloat(getComputedStyle(e).fontSize)));
+const s=[...sz].sort((a,b)=>a-b);out.push('font sizes '+s.join(','));out.push('min font '+s[0]+' px');
+out.push(out.some(l=>/^(CLIP|OVERLAP|OFF|PINS|PIN )/.test(l))?'RESULT: problems above':'RESULT: no clipping, no overlap');
 document.title=JSON.stringify(out);
 }catch(e){document.title=JSON.stringify(['checker error: '+e.message])}</script>`;
 
-const SANS = '"Avenir Next Condensed","Avenir Next","Helvetica Neue",sans-serif';
-const SERIF = 'Charter,"Bitstream Charter",Georgia,serif';
-const LEAD_W = (W - 2 * M - 2 * 16) / 3, CARD_W = (W - 2 * M - 4 * 12) / 5;
-const html = `<!doctype html><html><head><meta charset="utf-8"><title>front page</title><style>
-:root{--paper:${PAPER};--ink:${INK};--mute:#3E424A;--acc:${ACC};--teal:${TEAL};--ochre:${OCHRE};--sea:#D3DEE0;--land:#E3DBC8}
+const SANS = '"Avenir Next","Helvetica Neue",sans-serif';
+const COND = '"Avenir Next Condensed","Avenir Next","Helvetica Neue",sans-serif';
+const DATE = '"DIN Condensed","Avenir Next Condensed",sans-serif';
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>Tuesday 24 November 2026</title><style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{width:1024px;height:1024px;overflow:hidden;background:var(--paper);color:var(--ink)}
-body{position:relative;font:500 15px ${SANS};-webkit-font-smoothing:antialiased}
+html,body{width:1024px;height:1024px;overflow:hidden;background:${PAPER};color:${INK}}
+body{position:relative;font:500 16px ${SANS};-webkit-font-smoothing:antialiased}
 i{font-style:normal;text-box:trim-both cap alphabetic}
-.band{position:absolute;left:${M}px;width:${W - 2 * M}px}
-.head{position:absolute;left:0;top:0;width:${W}px;height:${HEAD_H}px;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:space-between;padding:0 ${M}px}
-h1{font:700 66px/1 ${SERIF};white-space:nowrap;letter-spacing:-.01em;text-box:trim-both cap alphabetic}
-.strap{font:700 15px/19px ${SANS};letter-spacing:.08em;text-transform:uppercase;text-align:right}
-.strap b{color:#F0A08C;font-weight:700}
-.deck{top:${DECK_Y}px;height:24px;font:700 19px/22px ${SANS};letter-spacing:-.005em;white-space:nowrap;overflow:hidden}
-.deck s{text-decoration:none;color:var(--acc);padding:0 5px}
-.tally{top:${TALLY_Y}px;height:22px;display:flex;align-items:center;gap:14px;white-space:nowrap;overflow:hidden;font:700 15px/1 ${SANS};letter-spacing:.06em;text-transform:uppercase}
-.tally>.t{color:var(--mute)}
-.rg{display:inline-flex;align-items:center;gap:6px}
-.rg b{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 4px;background:var(--teal);color:#fff;border-radius:3px;font:800 15px/1 ${SANS}}
-.rg span{text-box:trim-both cap alphabetic}
-.rule{position:absolute;left:${M}px;right:${M}px;height:3px;background:var(--ink)}
-.leads{top:${LEAD_Y}px;height:${LEAD_H}px;display:grid;grid-template-columns:repeat(3,1fr);column-gap:16px}
-.lead,.card{display:flex;flex-direction:column;overflow:hidden}
-.lead>svg{display:block;width:${LEAD_W.toFixed(2)}px;height:${ART_H}px;flex:none}
-.cards{top:${CARD_Y}px;height:${2 * CARD_H + CARD_GAP}px;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(2,${CARD_H}px);gap:${CARD_GAP}px 12px}
-.card>svg{display:block;width:${CARD_W.toFixed(2)}px;height:${SPOT_H}px;flex:none}
-.kick{display:flex;align-items:center;gap:6px;height:24px;flex:none;background:var(--ink);color:var(--paper);padding-right:3px}
-.nb{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:24px;height:24px;padding:0 3px;background:var(--acc);color:#fff;font:800 15px/1 ${SANS}}
-.pc{flex:1;min-width:0;font:700 15px/1 ${SANS};letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-box:trim-both cap alphabetic}
-.cf{display:inline-flex;align-items:center;flex:none;height:19px;padding:0 5px;border-radius:2px;font:800 15px/1 ${SANS};letter-spacing:.02em}
-.cf.confirmed{background:var(--paper);color:var(--ink)} .cf.official{background:var(--teal);color:#fff;box-shadow:0 0 0 1.5px var(--paper)}
-.cf.reported{background:var(--ochre);color:var(--ink)} .cf.claim{background:var(--acc);color:#fff;box-shadow:0 0 0 1.5px var(--paper)}
-.card .pc{letter-spacing:-.01em}
-.card .cf{padding:0 4px;letter-spacing:.02em}
-.hd{font:800 22px/24px ${SANS};margin-top:5px}
-.h3{font:800 17px/19px ${SANS};margin-top:4px}
-.dk{font:500 15px/17px ${SANS};color:var(--mute);margin-top:2px}
-.lead .dk{line-height:18px}
-.lead .pc{font-size:17px}
-.fig{font:800 30px/1 ${SANS};fill:${ACC};text-anchor:middle}
-.cal{font:800 16px/1 ${SANS};fill:#fff;text-anchor:middle;letter-spacing:.04em}
-.day{font:800 26px/1 ${SANS};fill:${INK};text-anchor:middle}
-.pct{font:800 19px/1 ${SANS};fill:${ACC};text-anchor:middle}
-.low{top:${LOW_Y}px;bottom:${FOOT_H + 6}px;display:grid;grid-template-columns:${MAP_W}px 1fr;column-gap:18px}
-.sec{display:flex;align-items:center;height:24px;background:var(--ink);color:var(--paper);padding:0 8px;font:800 15px/1 ${SANS};letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+[data-b]{position:absolute;left:${M}px;width:${W - 2 * M}px}
+.head{left:0;top:0;width:${W}px;height:${HEAD_H}px;background:${INK};color:${PAPER};padding:13px ${M}px 0;display:flex;flex-direction:column;justify-content:space-between}
+.strap{display:flex;justify-content:space-between;font:700 17px/1 ${SANS};letter-spacing:.09em;text-transform:uppercase;color:#E9E3D6}
+.strap b{color:#F2A58F;font-weight:800}
+h1{font:700 96px/1 ${DATE};white-space:nowrap;padding-bottom:12px;text-box:trim-both cap alphabetic;color:#fff}
+.deck{top:${DECK_Y}px;height:${DECK_H}px;display:flex;align-items:stretch;justify-content:space-between;font:700 19px/1 ${SANS};white-space:nowrap}
+.ts{display:flex;align-items:center;gap:8px}
+.ts>span:last-child{text-box:trim-both cap alphabetic}
+.deck .nb{height:${DECK_H}px;min-width:30px;font-size:18px}
+.rule{position:absolute;left:${M}px;width:${W - 2 * M}px;top:${RULE_Y}px;height:3px;background:${INK}}
+.nb{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:26px;height:26px;padding:0 4px;color:#fff;font:800 16px/1 ${SANS}}
+.kick{display:flex;align-items:center;gap:8px;height:26px;flex:none;border-bottom:3px solid ${INK}}
+.pc{flex:1;min-width:0;font:700 15px/1 ${SANS};letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;text-box:trim-both cap alphabetic}
+.lead .pc{font-size:16px}
+.leads{top:${LEAD_Y}px;height:${LEAD_H}px;display:grid;grid-template-columns:repeat(4,1fr);column-gap:${COL_GAP}px}
+.lead,.card{display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.lead>svg{display:block;width:100%;height:108px;flex:none;margin-top:6px}
+.fig{font:800 34px/38px ${COND};color:${ACC};margin-top:3px;white-space:nowrap;letter-spacing:-.005em}
+.hd{font:700 21px/24px ${SANS};letter-spacing:-.012em}
+.secs{top:${SEC_Y}px;height:${SEC_H}px;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,${SEC_ROW}px);gap:${SEC_GAP}px ${COL_GAP}px}
+.cb{display:flex;gap:8px;margin-top:5px;flex:1;min-height:0}
+.cb>svg{display:block;width:78px;height:78px;flex:none}
+.tx{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.fig2{font:800 25px/26px ${COND};color:${ACC};white-space:nowrap;margin-top:-3px}
+.h3{font:600 16px/18px ${COND};margin-top:1px}
+.low{top:${LOW_Y}px;height:${LOW_H}px;display:grid;grid-template-columns:${MAP_W}px 1fr;column-gap:20px}
+.sec{display:flex;align-items:center;height:28px;background:${INK};color:${PAPER};padding:0 9px;font:800 16px/1 ${SANS};letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
 .sec span{text-box:trim-both cap alphabetic}
-.map svg{display:block;margin-top:6px}
-.sea{fill:var(--sea)} .land{fill:var(--land);stroke:#FBF8F1;stroke-width:.6}
-.gr{fill:none;stroke:#C2CFD1;stroke-width:.6}
-.dot{fill:var(--ink)} .tk{stroke:var(--acc);stroke-width:1.6} .ae{fill:var(--acc)}
-.pr{fill:var(--acc);stroke:#fff;stroke-width:1.3}
+.map,.also{display:flex;flex-direction:column;min-width:0}
+.map svg{display:block;margin-top:6px;flex:none}
 .pn{font:800 15px ${SANS};fill:#fff;text-anchor:middle}
-.legend{font:600 15px/18px ${SANS};color:var(--mute);margin-top:5px;white-space:nowrap}
-.legend b{color:var(--acc)}
-.digest{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-flow:column;grid-template-rows:repeat(10,auto);column-gap:16px;row-gap:0;margin-top:4px;overflow:hidden}
-.digest li{display:flex;align-items:center;gap:7px;min-width:0}
-.digest .nb{background:var(--ink);min-width:24px;height:20px;font-size:15px}
-.di{font:500 16px/19px ${SANS};white-space:nowrap;min-width:0}
-.di b{font-weight:800}
-.foot{position:absolute;left:0;top:${FOOT_Y}px;width:${W}px;height:${FOOT_H}px;background:var(--ink);color:var(--paper);padding:5px ${M}px 0;font:500 15px/19px ${SANS}}
+.legend{display:grid;grid-template-columns:repeat(2,1fr);row-gap:5px;margin-top:5px;font:700 16px/1 ${SANS}}
+.lg{display:flex;align-items:center;gap:6px;white-space:nowrap;text-box:trim-both cap alphabetic}
+.lg b{width:14px;height:14px;flex:none;border-radius:3px}
+.mnote{font:500 15px/18px ${SANS};color:${MUTE};margin-top:auto}
+.digest{list-style:none;display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(${Math.ceil(DIGEST.length / 2)},1fr);column-gap:16px;margin-top:4px;flex:1}
+.digest li{display:flex;align-items:center;gap:8px;min-width:0}
+.digest .nb{min-width:28px;height:20px;font-size:15px}
+.di{font:500 16px/19px ${SANS};white-space:nowrap;overflow:hidden;min-width:0}
+.foot{left:0;top:${FOOT_Y}px;width:${W}px;height:${FOOT_H}px;background:${INK};color:#E9E3D6;padding:7px ${M}px 0;display:flex;flex-direction:column;gap:4px}
 .foot div{white-space:nowrap;overflow:hidden}
-.foot .cf{height:19px;margin:0 5px 0 14px;vertical-align:0} .foot .cf:first-child{margin-left:0}
-.foot b{font-weight:800;color:#fff}
+.foot .c1{font:600 17px/20px ${SANS};color:#fff}
+.foot .c1 b{color:#F2A58F;font-weight:800}
+.foot .c2{font:500 15px/18px ${SANS};flex:1}
 </style></head><body>
-<header class="head"><h1>Tuesday 24 November 2026</h1>
-<div class="strap"><b>One day</b><br>on Earth</div></header>
-<div class="band deck" data-b="deck">Hormuz oil traffic down 40%<s>•</s>Russian strike on Zaporizhzhia<s>•</s>Huang back at Nvidia<s>•</s>Huawei guilty in US trial</div>
-<div class="band tally" data-b="tally"><span class="t">${ALL.length} stories:</span>${tallyHtml}</div>
-<div class="rule" style="top:${LEAD_Y - 9}px"></div>
-<section class="band leads" data-b="leads">${leads}</section>
-<section class="band cards" data-b="cards">${cards}</section>
-<section class="band low" data-b="low">
+<header class="head" data-b="head"><div class="strap"><span><b>What happened in the world on Tuesday</b></span><span>${ALL.length} stories · five continents</span></div>
+<h1>TUESDAY 24 NOVEMBER 2026</h1></header>
+<div class="deck" data-b="deck">${teaser(1, 'Hormuz oil traffic down 40%')}${teaser(6, 'Huawei guilty in US trial')}${teaser(10, 'Senegal reinstated as AFCON winners')}</div>
+<div class="rule"></div>
+<section class="leads" data-b="leads">${leads}</section>
+<section class="secs" data-b="seconds">${cards}</section>
+<section class="low" data-b="low">
 <div class="map"><div class="sec"><span>Where it happened</span></div>
 <svg width="${MAP_W}" height="${MAP_H}" viewBox="0 0 ${MAP_W} ${MAP_H}">
-<rect class="sea" width="${MAP_W}" height="${MAP_H}"/><path class="gr" d="${graticule.join('')}"/><path class="land" d="${land}"/>
+<rect width="${MAP_W}" height="${MAP_H}" fill="#CFDCDF"/><path d="${land}" fill="#E3DBC8" stroke="#FBF8F1" stroke-width=".6"/>
 ${dots}${ticks}${pins}</svg>
-<div class="legend"><b>Red</b>: stories 1–${FEATURED} · dots: ${FEATURED + 1}–${FEATURED + DIGEST.filter((s) => s.loc).length} · Natural Earth</div></div>
-<div><div class="sec"><span>Also on Tuesday 24 November</span></div><ol class="digest">${digest}</ol></div>
+<div class="legend">${legend}</div>
+<div class="mnote">Squares ${LEAD[0].n}–${FEATURED}, dots ${FEATURED + 1}–${unpinned[0] - 1}; ${unpinned[0]}–${ALL.length} unpinned</div></div>
+<div class="also"><div class="sec"><span>Also on Tuesday 24 November 2026</span></div><ol class="digest">${digest}</ol></div>
 </section>
-<footer class="foot">
-<div>${conf('CONFIRMED')}in the record from an authority  ${conf('OFFICIAL')}an official statement  ${conf('REPORTED')}carried by the outlets named  ${conf('CLAIM')}one side’s account, unverified</div>
-<div><b>Date check:</b> every story happened or was first reported on Tue 24 Nov 2026 (UTC or local). Sources: Al Jazeera, 24 Nov; Wikipedia Current events. Illustrations drawn for this page</div>
+<footer class="foot" data-b="foot">
+<div class="c1"><b>Tuesday 24 November 2026.</b> Every story on this page happened, or was first reported, on 24 November 2026.</div>
+<div class="c2">Sources: Al Jazeera, Wikipedia Current events · Map: Natural Earth · Scenes drawn for this page</div>
 </footer>
 ${checker}
 </body></html>`;
 
 writeFileSync(new URL('atlas.html', here), html);
-console.log('map', MAP_W + 'x' + MAP_H, 'stories', ALL.length, 'featured', FEATURED, 'pins', geo.pins.length);
+console.log('map', MAP_W + 'x' + MAP_H, 'stories', ALL.length, 'featured', FEATURED, 'pins', geo.pins.length,
+  'regions', tally.map(([r, c]) => r + ' ' + c).join(', ') + ', World ' + ALL.filter((s) => s.region === 'World').length);

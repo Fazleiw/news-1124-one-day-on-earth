@@ -1,7 +1,10 @@
 // One Day on Earth: an illustrated front page of the news of Tuesday 24 November 2026 (make.fun news-image-20261124).
+// 32 stories: 4 leads and 8 cards with drawn scenes, a 20-line digest and a locator map, under the date as masthead.
 // Node 22, standard library only, no network. The image is entry.png beside this file (built from design/ with
-// design/render.sh); this program checks it against the gate and copies it, byte for byte, to
-// ${MAKEFUN_OUTPUT_DIR:-/output}/entry.png. Two runs write identical bytes because nothing is generated at run time.
+// design/render.sh). This program checks it against the gate and copies it, byte for byte, to
+// ${MAKEFUN_OUTPUT_DIR:-/output}/entry.png. The check: at most 1 MiB; a PNG signature (a JPEG is refused, since its
+// size is not read here); IHDR as the first chunk; width and height between 256 and 1024 px; and every chunk in bounds
+// through IEND with no trailing bytes. Two runs write identical bytes because nothing is generated at run time.
 //
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
