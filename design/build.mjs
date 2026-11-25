@@ -1,5 +1,6 @@
 // Builds design/atlas.html: a 1024x1024 news atlas of Tuesday 24 November 2026.
 // Deterministic: no randomness, no network. Map data: Natural Earth via world-atlas (data/).
+// CHECK=1 node design/build.mjs adds a layout checker to the page (collisions, overflow); render.sh never sets it.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const here = new URL('./', import.meta.url);
@@ -39,115 +40,117 @@ const geomPath = (g) => {
   return polys.map((p) => p.map((r) => ringPath(ring(r))).join('')).join('');
 };
 
-const NEWS = new Set(['Ukraine', 'Israel', 'Palestine', 'Saudi Arabia', 'Iran', 'Iraq', 'United Kingdom',
-  'Bangladesh', 'Malaysia', 'Senegal', 'Colombia', 'United States of America', 'Mexico', 'Cuba', 'Russia',
-  'Turkey', 'Norway', 'Dem. Rep. Congo', 'Nigeria', 'South Africa', 'United Arab Emirates', 'Vietnam',
-  'Pakistan', 'South Korea', 'China', 'Australia', 'Myanmar']);
-let land = '', news = '';
+let land = '';
 for (const g of topo.objects.countries.geometries) {
-  if (g.properties.name === 'Antarctica') continue;
-  const d = geomPath(g);
-  if (NEWS.has(g.properties.name)) news += d; else land += d;
+  if (g.properties.name !== 'Antarctica') land += geomPath(g);
 }
 
 // ---- stories ----------------------------------------------------------------------------------
-// lead: card {x,y} in map coords, anchor {ax,ay} where the leader meets the card.
-// off: badge offset from the true location, for crowded spots.
+// Lead cards are CARD_W x CARD_H, placed in map coords at card:[x,y], at least INSET from the frame.
+// from:[side, offset] is where the leader leaves the card: l/r edge at y offset, t/b edge at x offset.
+const CARD_W = 184, CARD_H = 80, INSET = 12, PIN_R = 9;
 const LEAD = [
   { n: 1, loc: [35.14, 47.84], place: 'Zaporizhzhia, Ukraine', icon: 'block',
-    hd: 'Russian strike kills 2, injures 44', dk: 'House destroyed, apartment block hit',
-    card: [612, 8], anchor: [636, 68] },
+    hd: 'Russian strike kills 2, injures 44', dk: 'Apartment block also hit',
+    card: [612, 12], from: ['l', 72] },
   { n: 2, loc: [34.45, 31.5], place: 'Gaza', icon: 'target',
-    hd: 'Israeli strike kills senior Hamas official', dk: 'Naim Abu Nahl, 50; four others hurt',
-    card: [356, 158], anchor: [560, 182] },
+    hd: 'Israeli strike kills senior Hamas official', dk: 'Naim Abu Nahl, 50; four hurt',
+    card: [420, 298], from: ['t', 170] },
   { n: 3, loc: [46.68, 24.71], place: 'Riyadh, Saudi Arabia', icon: 'drone',
-    hd: 'Houthi drone hits Riyadh tower; 11 hurt', dk: 'Building in the financial district',
-    card: [612, 372], anchor: [640, 372] },
+    hd: 'Houthi drone hits Riyadh tower; 11 hurt', dk: 'Building in financial district',
+    card: [624, 298], from: ['t', 12] },
   { n: 4, loc: [56.3, 26.5], place: 'Strait of Hormuz', icon: 'tanker',
-    hd: 'Hormuz oil traffic down 40% as tanker attacks rise', dk: 'Iran: three ships hit mines, caught fire',
-    card: [692, 300], anchor: [716, 300] },
+    hd: 'Hormuz oil traffic down 40% amid tanker attacks', dk: 'Iran says 3 ships hit mines',
+    card: [622, 100], from: ['b', 36] },
   { n: 5, loc: [-121.96, 37.35], place: 'Silicon Valley, US', icon: 'chip',
-    hd: 'Huang returns as Nvidia CEO; US blacklists Megaspeed', dk: 'Nvidia regains $952bn in market value',
-    card: [8, 8], anchor: [46, 70] },
-  { n: 6, loc: [44.0, 36.0], place: 'Iraq', icon: 'derrick',
-    hd: 'Iraq orders takeover of Kurdish-held oilfields', dk: 'Al-Zaidi also orders crossings seized',
-    card: [630, 78], anchor: [640, 138] },
+    hd: 'Huang back as Nvidia CEO; US blacklists Megaspeed', dk: 'Nvidia regains $952bn in value',
+    card: [12, 12], from: ['b', 33] },
+  { n: 6, loc: [149.13, -35.28], place: 'Canberra, Australia', icon: 'phone',
+    hd: 'Tech giants face fines of up to 5% of revenue', dk: 'Bill expected to pass this week',
+    card: [828, 318], from: ['b', 134] },
   { n: 7, loc: [-0.12, 51.5], place: 'United Kingdom', icon: 'thermo',
-    hd: 'Record 5,258 heat deaths in UK summer', dk: 'UK Health Security Agency estimate',
-    card: [246, 84], anchor: [438, 108] },
+    hd: 'Record 5,258 heat deaths in UK summer', dk: 'Estimate by UK health agency',
+    card: [240, 104], from: ['r', 12] },
   { n: 8, loc: [90.4, 23.8], place: 'Dhaka, Bangladesh', icon: 'plane',
-    hd: 'Sheikh Hasina plans return from exile on 16 Dec', dk: 'Dhaka says she can only be extradited',
-    card: [824, 78], anchor: [840, 140] },
-  { n: 9, loc: [101.7, 3.14], place: 'Kuala Lumpur, Malaysia', icon: 'boat',
-    hd: 'Malaysia to send thousands of Rohingya to Myanmar', dk: 'Five days after ICJ genocide ruling',
-    card: [834, 226], anchor: [834, 262] },
+    hd: 'Sheikh Hasina plans return from exile on 16 Dec', dk: 'Dhaka says only by extradition',
+    card: [828, 12], from: ['b', 132] },
+  { n: 9, loc: [101.7, 3.14], place: 'Kuala Lumpur', icon: 'boat',
+    hd: 'Malaysia to send Rohingya back to Myanmar', dk: '5 days after ICJ genocide ruling',
+    card: [828, 230], from: ['l', 49] },
   { n: 10, loc: [-17.45, 14.7], place: 'Dakar, Senegal', icon: 'trophy',
     hd: 'Senegal reinstated as AFCON 2025 champions', dk: 'Sport court rules against Morocco',
-    card: [300, 322], anchor: [398, 322] },
+    card: [216, 298], from: ['t', 172] },
   { n: 11, loc: [-75.5, 10.4], place: 'Cartagena, Colombia', icon: 'cart',
-    hd: 'Gunmen hold 25 hostages in a supermarket', dk: 'Police and army deployed to the scene',
-    card: [8, 300], anchor: [150, 300] },
+    hd: 'Gunmen hold 25 hostages in a supermarket', dk: 'Police and army deployed',
+    card: [12, 298], from: ['t', 172] },
   { n: 12, loc: [-73.95, 40.65], place: 'US federal court', icon: 'gavel',
-    hd: 'Huawei guilty of trade-secrets conspiracy, fraud', dk: 'Jury clears it of racketeering charge',
-    card: [212, 8], anchor: [226, 70] },
+    hd: 'Huawei guilty of trade-secrets conspiracy, fraud', dk: 'Jury clears it of racketeering',
+    card: [216, 12], from: ['b', 14] },
 ];
 
-const LIST = [
-  { region: 'The Americas' },
-  { n: 13, loc: [-77.04, 38.9], off: [-14, 12], place: 'Washington', icon: 'podium',
-    hd: 'Trump urges faster federal executions', dk: 'Attacks Newsom over 548 commuted death sentences' },
-  { n: 14, loc: [-77.5, 40.6], off: [-20, -6], place: 'Pennsylvania, US', icon: 'syringe',
-    hd: 'Ninth measles death in state outbreak', dk: 'Outbreak has spread to 46 counties' },
-  { n: 15, loc: [-107.4, 24.8], place: 'Sinaloa, Mexico', icon: 'cuffs',
-    hd: 'Mexico to try ‘El Chapo Isidro’ at home', dk: 'Drug, arms charges at home despite US bid' },
-  { n: 16, loc: [-82.36, 23.1], place: 'Havana, Cuba', icon: 'cross',
-    hd: 'WHO chief visits as Cuba’s health care falters', dk: 'Fuel shortages deepen the crisis' },
-  { n: 17, loc: [-74.1, 4.6], place: 'Colombia', icon: 'car',
-    hd: 'President blames ex-FARC rebels for car bomb', dk: 'Blast injured dozens; De la Espriella vows response' },
-  { region: 'Europe' },
-  { n: 18, loc: [37.6, 55.75], place: 'Moscow', icon: 'flame',
-    hd: 'Putin: retaliation ‘inevitable’ for oil-plant strikes', dk: 'Drones cut Russian refining 45% since late Oct' },
-  { n: 19, loc: [30.52, 39.78], off: [-6, -12], place: 'Eskişehir, Türkiye', icon: 'heli',
-    hd: 'Military helicopter crash kills five', dk: 'Second deadly army crash in days' },
-  { n: 20, loc: [-0.12, 51.5], off: [4, 18], place: 'Champions League', icon: 'ball',
-    hd: 'Arsenal held 1-1 by Dortmund', dk: 'Real Madrid rout PSV 5-1' },
-  { n: 21, loc: [10.75, 59.9], place: 'Norway', icon: 'gavel',
-    hd: 'Cameroon separatist denies war crimes', dk: 'Lucas Cho Ayaba pleads not guilty' },
-  { region: 'Africa' },
-  { n: 22, loc: [30.25, 1.56], place: 'Bunia, DR Congo', icon: 'shield',
-    hd: 'CRP rebels halt advance on Bunia', dk: 'Retreat after heavy clashes with the army' },
-  { n: 23, loc: [13.16, 11.85], place: 'Borno, Nigeria', icon: 'book',
-    hd: 'School enrolment nearly doubles in Borno', dk: 'Violence and poverty still keep many out' },
-  { n: 24, loc: [28.05, -26.2], place: 'Johannesburg', icon: 'gavel',
-    hd: 'Zimbabwean convicted of trying to fight for Russia', dk: 'Arrested at the airport on 8 November' },
-  { region: 'Middle East' },
-  { n: 25, loc: [34.45, 31.5], off: [-24, 4], place: 'Gaza', icon: 'virus',
-    hd: 'Strikes kill 7 as meningitis spreads', dk: '272 cases in October, eight times the norm' },
-  { n: 26, loc: [55.95, 25.8], off: [14, 12], place: 'Ras Al Khaimah, UAE', icon: 'bus',
-    hd: 'Bus crash kills 13 in the UAE', dk: 'Crash in the emirate of Ras Al Khaimah' },
-  { region: 'Asia' },
-  { n: 27, loc: [105.83, 21.0], place: 'Hanoi, Vietnam', icon: 'burst',
-    hd: 'Restaurant blast kills at least six', dk: 'At least 10 hurt in Dong Da district' },
-  { n: 28, loc: [73.05, 33.7], place: 'Pakistan', icon: 'rocket',
-    hd: 'Pakistani pilot set to fly to Tiangong', dk: 'Zeeshan Ali to spend a week on China’s station' },
-  { n: 29, loc: [129.5, 37.5], place: 'South Korea', icon: 'jet',
-    hd: 'Air-raid alert as Russian jets near airspace', dk: 'Several jets on the verge of entering' },
-  { n: 30, loc: [121.47, 31.23], place: 'Shanghai, China', icon: 'lens',
-    hd: 'Shanghai party chief Chen Jining probed', dk: 'Fourth Politburo member targeted since last year' },
-  { n: 31, loc: [113.26, 23.13], place: 'China', icon: 'plane',
-    hd: 'China Southern unit to buy 50 Boeing 737s', dk: 'Boeing’s first big China order in nearly a decade' },
-  { n: 32, place: 'Cricket · India v UAE', icon: 'bat',
-    hd: 'Sooryavanshi, 15, hits 204 off 53 balls', dk: '28 sixes, most ever in a senior men’s innings' },
-  { region: 'Oceania' },
-  { n: 33, loc: [149.13, -35.28], place: 'Canberra, Australia', icon: 'phone',
-    hd: 'Tech giants face fines up to 5% of revenue', dk: 'Online-harm bill expected to pass this week' },
-  { region: 'Worldwide' },
-  { n: 34, place: 'World Food Programme', icon: 'wheat',
-    hd: 'Wars choke food routes; aid for 7.3m at risk', dk: 'Grain is “not reaching” those in need, WFP says' },
-  { n: 35, place: 'United Nations', icon: 'globe',
-    hd: 'Guterres wants AI oversight deal within a year', dk: 'UN chief steps up AI push as term nears end' },
-  { n: 36, place: 'UN Women', icon: 'person',
-    hd: 'Five women killed every hour by partner, kin', dk: 'Global figure for 2025; home most dangerous place' },
+// The list, in a 4-column grid: row 1 holds the four big regions, row 2 the rest.
+// Numbers run 13-30 in reading order (row by row). Sport and worldwide stories carry no pin.
+const SECTIONS = [
+  { region: 'The Americas', items: [
+    { loc: [-77.04, 38.9], off: [-17, 14], place: 'Washington',
+      hd: 'Trump urges faster federal executions', dk: 'Attacks Newsom over 548 commutations' },
+    { loc: [-107.4, 24.8], place: 'Sinaloa, Mexico',
+      hd: 'Mexico to try ‘El Chapo Isidro’', dk: 'Drug and weapons charges, despite US bid' },
+    { loc: [-82.36, 23.1], place: 'Havana, Cuba',
+      hd: 'WHO chief visits as Cuba’s health care falters', dk: 'Fuel shortages deepen the crisis' },
+  ] },
+  { region: 'Europe', items: [
+    { loc: [37.6, 55.75], place: 'Moscow',
+      hd: 'Putin: retaliation ‘inevitable’ for oil-plant strikes', dk: 'Russian refining down 45% since late Oct' },
+    { loc: [30.52, 39.78], place: 'Eskişehir, Türkiye',
+      hd: 'Military helicopter crash kills five', dk: 'Second deadly army crash in days' },
+    { loc: [10.75, 59.9], place: 'Norway',
+      hd: 'Cameroon separatist denies war crimes', dk: 'Lucas Cho Ayaba pleads not guilty' },
+  ] },
+  { region: 'Africa', items: [
+    { loc: [30.25, 1.56], place: 'Bunia, DR Congo',
+      hd: 'CRP rebels halt advance on Bunia', dk: 'Retreat after heavy clashes with army' },
+    { loc: [13.16, 11.85], place: 'Borno, Nigeria',
+      hd: 'School enrolment nearly doubles in Borno', dk: 'Violence and poverty keep many out' },
+    { loc: [28.05, -26.2], off: [0, 17], place: 'Johannesburg',
+      hd: 'Zimbabwean convicted of trying to fight for Russia', dk: 'Arrested at the airport on 8 November' },
+  ] },
+  { region: 'Asia', items: [
+    { loc: [105.83, 21.0], place: 'Hanoi, Vietnam',
+      hd: 'Restaurant blast kills at least six', dk: 'At least 10 hurt in Dong Da district' },
+    { loc: [129.5, 37.5], place: 'South Korea',
+      hd: 'Air-raid alert as Russian jets near airspace', dk: 'Several jets on the verge of entering' },
+    { loc: [113.26, 23.13], place: 'China',
+      hd: 'China Southern unit to buy 50 Boeing 737s', dk: 'First big China order in nearly a decade' },
+  ] },
+  { region: 'Middle East', items: [
+    { loc: [44.0, 36.0], place: 'Iraq',
+      hd: 'Iraq orders takeover of Kurdish-held oilfields', dk: 'Al-Zaidi also orders crossings seized' },
+    { loc: [34.45, 31.5], off: [-15, 23], place: 'Gaza',
+      hd: 'Strikes kill 7 as meningitis spreads', dk: '272 cases in October, 8 times the norm' },
+  ] },
+  { region: 'Sport', items: [
+    { place: 'Champions League',
+      hd: 'Arsenal held 1-1 by Dortmund', dk: 'Real Madrid rout PSV 5-1' },
+    { place: 'Cricket · India v UAE',
+      hd: 'Sooryavanshi, 15, hits 204 off 53 balls', dk: '28 sixes, a men’s senior record' },
+  ] },
+  { region: 'Worldwide', items: [
+    { place: 'World Food Programme',
+      hd: 'Wars choke food routes; aid for 7.3m at risk', dk: 'Grain is “not reaching” those in need' },
+    { place: 'UN Women',
+      hd: 'Five women killed every hour by partner, kin', dk: 'Global figure for 2025' },
+  ] },
+];
+let next = 13;
+for (const sec of SECTIONS) for (const it of sec.items) it.n = next++;
+const LAST = next - 1;
+const PINNED_LAST = Math.max(...SECTIONS.flatMap((s) => s.items).filter((i) => i.loc).map((i) => i.n));
+
+// Continent names, set in open water (map coords, text centre).
+const REGIONS = [
+  ['THE AMERICAS', 104, 278], ['EUROPE', 440, 26], ['AFRICA', 452, 287],
+  ['MIDDLE EAST', 694, 256], ['ASIA', 988, 156], ['OCEANIA', 912, 433],
 ];
 
 // ---- icons (24x24, ink line + one accent) -------------------------------------------------------
@@ -187,108 +190,155 @@ const I = {
   person: '<circle cx="12" cy="5" r="3"/><path class="a" d="M12 9c-3 0-4.5 2-5 5l-2 5h5l.5 3.5h3L14 19h5l-2-5c-.5-3-2-5-5-5z"/>',
 };
 
+
 // ---- render ----------------------------------------------------------------------------------
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const icon = (id, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24"><use href="#i-${id}"/></svg>`;
+const icon = (id) => `<svg class="ic" viewBox="0 0 24 24"><use href="#i-${id}"/></svg>`;
 const symbols = Object.entries(I).map(([k, v]) => `<symbol id="i-${k}" viewBox="0 0 24 24">${v}</symbol>`).join('');
+const badge = (n, cls) => `<span class="bd ${cls}">${n}</span>`;
+const f1 = (v) => +v.toFixed(1);
 
 const graticule = [];
 for (let lon = -120; lon <= 160; lon += 30) { const [x] = px(lon, 0); graticule.push(`M${x.toFixed(1)} 0V${MAP_H}`); }
 for (const lat of [-30, 0, 30, 60]) { const [, y] = px(0, lat); graticule.push(`M0 ${y.toFixed(1)}H${W}`); }
 const [, eqY] = px(0, 0);
 
-let leaders = '', pins = '';
+const anchor = ({ card: [x, y], from: [side, o] }) =>
+  side === 'l' ? [x, y + o] : side === 'r' ? [x + CARD_W, y + o] : side === 't' ? [x + o, y] : [x + o, y + CARD_H];
+
+// Geometry, kept for the checker: pins {n, x, y} at badge centres, leaders [x1, y1, x2, y2, n].
+const geo = { pins: [], leaders: [], cards: LEAD.map((s) => ({ n: s.n, x: s.card[0], y: s.card[1] })) };
+// Draw order: link lines, then black pins, then red pins, so a lead pin is never covered.
+let leaders = '', links = '', pinsK = '', pinsR = '';
 for (const s of LEAD) {
-  const [x, y] = px(...s.loc);
-  leaders += `<path class="ld" d="M${x.toFixed(1)} ${y.toFixed(1)}L${s.anchor[0]} ${s.anchor[1]}"/><circle class="ae" cx="${s.anchor[0]}" cy="${s.anchor[1]}" r="2"/>`;
-  pins += `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle class="pl" r="10"/><text class="pn" y="4">${s.n}</text></g>`;
+  const [x, y] = px(...s.loc).map(f1);
+  const [ax, ay] = anchor(s);
+  geo.leaders.push([x, y, ax, ay, s.n]);
+  leaders += `<path class="ld" d="M${x} ${y}L${ax} ${ay}"/><circle class="ae" cx="${ax}" cy="${ay}" r="2.2"/>`;
+  pinsR += `<g transform="translate(${x} ${y})"><circle class="pr" r="${PIN_R}"/><text class="pn" y="3.6">${s.n}</text></g>`;
+  geo.pins.push({ n: s.n, x, y });
 }
-for (const s of LIST) {
+for (const s of SECTIONS.flatMap((sec) => sec.items)) {
   if (!s.loc) continue;
-  const [x, y] = px(...s.loc);
+  const [x, y] = px(...s.loc).map(f1);
   const [dx, dy] = s.off ?? [0, 0];
-  if (dx || dy) pins += `<path class="lk" d="M${x.toFixed(1)} ${y.toFixed(1)}l${dx} ${dy}"/><circle class="dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.8"/>`;
-  pins += `<g transform="translate(${(x + dx).toFixed(1)} ${(y + dy).toFixed(1)})"><circle class="ps" r="8"/><text class="pm" y="3.3">${s.n}</text></g>`;
+  if (dx || dy) links += `<path class="lk" d="M${x} ${y}l${dx} ${dy}"/><circle class="dot" cx="${x}" cy="${y}" r="2"/>`;
+  pinsK += `<g transform="translate(${f1(x + dx)} ${f1(y + dy)})"><circle class="pk" r="${PIN_R}"/><text class="pn" y="3.6">${s.n}</text></g>`;
+  geo.pins.push({ n: s.n, x: f1(x + dx), y: f1(y + dy) });
 }
+const regionLabels = REGIONS.map(([t, x, y]) => `<text class="cl" x="${x}" y="${y}">${t}</text>`).join('');
 
 const cards = LEAD.map((s) => `
-<div class="card" style="left:${s.card[0]}px;top:${s.card[1]}px">
-  ${icon(s.icon)}
-  <div><div class="kick"><b>${s.n}</b>${esc(s.place)}</div><div class="hd">${esc(s.hd)}</div><div class="dk">${esc(s.dk)}</div></div>
+<div class="card" data-n="${s.n}" style="left:${s.card[0]}px;top:${s.card[1]}px">
+  <div class="kick">${badge(s.n, 'r')}<span class="pc">${esc(s.place)}</span>${icon(s.icon)}</div>
+  <div class="hd">${esc(s.hd)}</div><div class="dk">${esc(s.dk)}</div>
 </div>`).join('');
 
-const items = LIST.map((s) => s.region
-  ? `<div class="reg">${s.region}</div>`
-  : `<div class="it">${icon(s.icon, 'ic2')}<div><div class="pl2"><b>${s.n}</b>${esc(s.place)}</div><div class="h2">${esc(s.hd)}</div><div class="d2">${esc(s.dk)}</div></div></div>`).join('');
+const cells = SECTIONS.map((sec) => `<div class="cell"><div class="tab">${sec.region}</div>${sec.items.map((s) => `
+<div class="it">${badge(s.n, 'k')}<div><div class="pl2">${esc(s.place)}</div><div class="h2">${esc(s.hd)}</div><div class="d2">${esc(s.dk)}</div></div></div>`).join('')}</div>`).join('')
+  + `<div class="cell"><div class="tab">Sources</div><p class="src">Al Jazeera reports dated 24 Nov 2026 and Wikipedia’s Current events portal for that day. Figures as reported; claims attributed.</p><p class="src">Map: Natural Earth. Pins mark the city or country named in the report and are approximate.</p></div>`;
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-:root{--paper:#F4F0E6;--ink:#191C22;--mute:#5B5E66;--acc:#C0391F;--sea:#DAE3E3;--land:#E9E2D2;--news:#E7CBB8}
+// Layout checker (CHECK=1 only): writes a JSON report into document.title for headless --dump-dom.
+const checker = !process.env.CHECK ? '' : `<script>try{
+const G=${JSON.stringify(geo)},CW=${CARD_W},CH=${CARD_H},R=${PIN_R},IN=${INSET},MW=${W},MH=${MAP_H},MY=${MAP_Y};
+const out=[];const hit=(a,b,p=0)=>a.x<b.x+b.w+p&&b.x<a.x+a.w+p&&a.y<b.y+b.h+p&&b.y<a.y+a.h+p;
+const cards=G.cards.map(c=>({n:c.n,x:c.x,y:c.y,w:CW,h:CH}));
+const pins=G.pins.map(p=>({n:p.n,x:p.x-R,y:p.y-R,w:2*R,h:2*R,cx:p.x,cy:p.y}));
+const labs=[...document.querySelectorAll('.cl')].map(t=>{const b=t.getBBox();return{n:t.textContent,x:b.x,y:b.y,w:b.width,h:b.height}});
+cards.forEach((a,i)=>{if(a.x<IN||a.y<IN||a.x+CW>MW-IN||a.y+CH>MH-IN)out.push('card '+a.n+' outside inset');
+  cards.slice(i+1).forEach(b=>hit(a,b,6)&&out.push('cards '+a.n+'/'+b.n));
+  pins.forEach(p=>hit(a,p,2)&&out.push('card '+a.n+' covers pin '+p.n));
+  labs.forEach(l=>hit(a,l,2)&&out.push('card '+a.n+' covers label '+l.n));});
+labs.forEach(l=>pins.forEach(p=>hit(l,p,1)&&out.push('label '+l.n+' on pin '+p.n)));
+pins.forEach((a,i)=>pins.slice(i+1).forEach(b=>Math.hypot(a.cx-b.cx,a.cy-b.cy)<2*R+3&&out.push('pins '+a.n+'/'+b.n)));
+const near=(x1,y1,x2,y2,px,py)=>{const dx=x2-x1,dy=y2-y1,t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/(dx*dx+dy*dy)));return Math.hypot(x1+t*dx-px,y1+t*dy-py)};
+G.leaders.forEach(([x1,y1,x2,y2,n],i)=>{
+  for(let k=1;k<40;k++){const x=x1+(x2-x1)*k/40,y=y1+(y2-y1)*k/40;
+    cards.forEach(c=>c.n!==n&&x>c.x-3&&x<c.x+CW+3&&y>c.y-3&&y<c.y+CH+3&&out.push('leader '+n+' crosses card '+c.n));
+    labs.forEach(l=>x>l.x&&x<l.x+l.w&&y>l.y&&y<l.y+l.h&&out.push('leader '+n+' crosses label '+l.n));}
+  pins.forEach(p=>p.n!==n&&near(x1,y1,x2,y2,p.cx,p.cy)<R+3&&out.push('leader '+n+' grazes pin '+p.n));
+  G.leaders.slice(i+1).forEach(([a1,b1,a2,b2,m])=>{const d=(x2-x1)*(b2-b1)-(y2-y1)*(a2-a1);if(!d)return;
+    const t=((a1-x1)*(b2-b1)-(b1-y1)*(a2-a1))/d,u=((a1-x1)*(y2-y1)-(b1-y1)*(x2-x1))/d;t>0&&t<1&&u>0&&u<1&&out.push('leaders '+n+'/'+m+' cross')});});
+document.querySelectorAll('.card').forEach(c=>{c.scrollHeight>c.clientHeight+1&&out.push('card '+c.dataset.n+' overflows by '+(c.scrollHeight-c.clientHeight));
+  const h=c.querySelector('.hd');h.offsetHeight>2*parseFloat(getComputedStyle(h).lineHeight)+1&&out.push('card '+c.dataset.n+' head >2 lines');});
+document.querySelectorAll('.dk,.d2,.pc,.pl2').forEach(d=>d.scrollWidth>d.clientWidth+1&&out.push('one-liner wraps/clips: '+d.textContent));
+document.querySelectorAll('.h2').forEach(d=>d.offsetHeight>2*parseFloat(getComputedStyle(d).lineHeight)+1&&out.push('list head >2 lines: '+d.textContent));
+const cols=document.querySelector('.cols');cols.scrollHeight>cols.clientHeight+1&&out.push('list overflows by '+(cols.scrollHeight-cols.clientHeight));
+const tabs=[...document.querySelectorAll('.tab')].map(t=>t.getBoundingClientRect());
+out.push('tab tops '+tabs.map(t=>Math.round(t.top)).join(','),'tab widths '+[...new Set(tabs.map(t=>Math.round(t.width)))].join(','),'list slack '+Math.round(cols.getBoundingClientRect().bottom-Math.max(...[...document.querySelectorAll('.it,.src')].map(e=>e.getBoundingClientRect().bottom))));
+let min=99;document.querySelectorAll('body *').forEach(e=>{if([...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim()))min=Math.min(min,parseFloat(getComputedStyle(e).fontSize))});
+document.querySelectorAll('text').forEach(e=>min=Math.min(min,parseFloat(getComputedStyle(e).fontSize)));out.push('min font '+min);
+document.title=JSON.stringify(out);
+}catch(e){document.title=JSON.stringify(['checker error: '+e.message])}</script>`;
+
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>atlas</title><style>
+:root{--paper:#F4F0E6;--ink:#191C22;--mute:#3E424A;--acc:#C0391F;--sea:#D8E2E3;--land:#E8E0CD}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:1024px;height:1024px;overflow:hidden;background:var(--paper);color:var(--ink)}
 body{position:relative;font-family:"Avenir Next Condensed","Avenir Next","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
 .disp{font-family:Charter,"Bitstream Charter",Georgia,serif}
-.top{position:absolute;left:20px;right:20px;top:12px;display:flex;justify-content:space-between;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--ink);padding-bottom:5px}
+.top{position:absolute;left:20px;right:20px;top:12px;display:flex;justify-content:space-between;font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--ink);padding-bottom:5px}
 .top .l{color:var(--acc)}
-h1{position:absolute;left:18px;top:30px;font-size:54px;line-height:60px;font-weight:700;letter-spacing:-.01em}
-.deck{position:absolute;right:20px;top:38px;width:300px;font-size:13.5px;line-height:17px;color:var(--ink);font-weight:500}
-.deck b{color:var(--acc);font-weight:700}
+h1{position:absolute;left:18px;top:32px;font-size:54px;line-height:60px;font-weight:700;letter-spacing:-.01em}
+.key{position:absolute;right:20px;top:38px;width:292px;font-size:13px;line-height:20px;font-weight:600}
+.key div{display:flex;align-items:center;gap:7px;height:20px}
+.key em{font-style:normal;font-weight:500;color:var(--mute)}
+.bd{display:inline-flex;align-items:center;justify-content:center;flex:none;width:18px;height:18px;border-radius:50%;color:#fff;font:700 10.5px/1 Charter,Georgia,serif;letter-spacing:-.02em}
+.bd.r{background:var(--acc)} .bd.k{background:var(--ink)} .bd.o{background:none;border:1.5px dashed var(--mute)}
 .map{position:absolute;left:0;top:${MAP_Y}px;width:${W}px;height:${MAP_H}px;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
 .map>svg{position:absolute;left:0;top:0}
-.sea{fill:var(--sea)} .land{fill:var(--land);stroke:#F8F5EE;stroke-width:.6} .nw{fill:var(--news);stroke:#F8F5EE;stroke-width:.6}
-.gr{fill:none;stroke:#C9D3D3;stroke-width:.6} .eq{fill:none;stroke:#B5C1C1;stroke-width:.8;stroke-dasharray:3 3}
-.ld{fill:none;stroke:var(--acc);stroke-width:1.3} .ae{fill:var(--acc)}
-.lk{fill:none;stroke:var(--ink);stroke-width:1} .dot{fill:var(--ink)}
-.pl{fill:var(--acc);stroke:#fff;stroke-width:1.8} .pn{font:700 12px Charter,Georgia,serif;fill:#fff;text-anchor:middle}
-.ps{fill:var(--ink);stroke:#fff;stroke-width:1.4} .pm{font:700 9.5px Charter,Georgia,serif;fill:#fff;text-anchor:middle}
-.card{position:absolute;width:204px;display:flex;gap:7px;background:rgba(255,253,248,.96);border:1px solid var(--ink);border-left:3px solid var(--acc);padding:5px 7px 6px 6px}
-.card>div{min-width:0}
-.ic{width:24px;height:24px;flex:none;margin-top:3px}
-svg use{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sea{fill:var(--sea)} .land{fill:var(--land);stroke:#F8F5EE;stroke-width:.6}
+.gr{fill:none;stroke:#C6D1D2;stroke-width:.6} .eq{fill:none;stroke:#AEBBBC;stroke-width:.8;stroke-dasharray:3 3}
+.cl{font:700 12px "Avenir Next Condensed","Avenir Next",sans-serif;letter-spacing:.3em;fill:#55707A;text-anchor:middle}
+.ld{fill:none;stroke:var(--acc);stroke-width:1.4} .ae{fill:var(--acc)}
+.lk{fill:none;stroke:var(--ink);stroke-width:1.1} .dot{fill:var(--ink)}
+.pr{fill:var(--acc);stroke:#fff;stroke-width:1.5} .pk{fill:var(--ink);stroke:#fff;stroke-width:1.5}
+.pn{font:700 10.5px Charter,Georgia,serif;fill:#fff;text-anchor:middle;letter-spacing:-.02em}
+.card{position:absolute;width:${CARD_W}px;height:${CARD_H}px;overflow:hidden;background:rgba(255,253,248,.97);border:1px solid var(--ink);border-left:3px solid var(--acc);padding:5px 6px 0 7px}
+.kick{display:flex;align-items:center;gap:6px;height:18px}
+.pc{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mute);white-space:nowrap;overflow:hidden;flex:1}
+.ic{width:18px;height:18px;flex:none}
+svg use{fill:none;stroke:var(--ink);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 symbol .a{fill:var(--acc);stroke:none} symbol .as{stroke:var(--acc)}
-.kick{font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);line-height:12px;white-space:nowrap}
-.kick b,.pl2 b{font-family:Charter,Georgia,serif;color:var(--acc);font-size:12px;letter-spacing:0;margin-right:5px}
-.hd{font-size:14px;line-height:15px;font-weight:700;margin-top:1px}
-.dk{font-size:11px;line-height:13px;color:var(--mute);font-weight:500;margin-top:2px}
+.hd{font-size:15px;line-height:16px;font-weight:700;margin-top:3px;text-wrap:balance}
+.dk{font-size:12px;line-height:14px;color:var(--mute);font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden}
 .also{position:absolute;left:20px;right:20px;top:${MAP_Y + MAP_H + 10}px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--ink);padding-bottom:4px}
-.also .t{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
-.also .s{font-size:11px;color:var(--mute);font-weight:500}
-.cols{position:absolute;left:20px;right:20px;top:${MAP_Y + MAP_H + 38}px;bottom:36px;column-count:4;column-gap:22px;column-fill:balance}
-.reg{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);border-top:1px solid var(--ink);padding-top:3px;margin-bottom:5px;break-after:avoid}
-.it{display:flex;gap:7px;margin-bottom:7px;break-inside:avoid}
-.ic2{width:22px;height:22px;flex:none;margin-top:3px}
-.pl2{font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);line-height:12px}
-.pl2 b{font-size:11px;color:var(--ink)}
-.h2{font-size:13px;line-height:14.5px;font-weight:700}
-.d2{font-size:10.5px;line-height:12.5px;color:var(--mute);font-weight:500}
-.foot{position:absolute;left:20px;right:20px;bottom:10px;border-top:1px solid var(--ink);padding-top:5px;font-size:10px;line-height:12px;color:var(--mute);font-weight:500;display:flex;justify-content:space-between}
-.foot b{color:var(--ink)}
-.key{position:absolute;left:824px;top:8px;width:192px;font-size:10px;line-height:13px;font-weight:500;color:var(--ink);background:rgba(255,253,248,.9);border:1px solid var(--ink);padding:5px 7px}
-.key .t{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px}
-.key i{display:inline-block;vertical-align:-2px;margin-right:4px}
+.also .t{font-size:14px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.also .s{font-size:12px;color:var(--mute);font-weight:500}
+.cols{position:absolute;left:20px;right:20px;top:${MAP_Y + MAP_H + 42}px;bottom:10px;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:auto auto;column-gap:22px;row-gap:10px;align-content:start;overflow:hidden}
+.tab{font-size:11.5px;line-height:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);border-bottom:1.5px solid var(--ink);padding-bottom:3px;margin-bottom:7px}
+.it{display:flex;gap:8px;margin-bottom:10px}
+.it>div{min-width:0;flex:1}
+.it .bd{margin-top:-1px}
+.pl2{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mute);line-height:14px;white-space:nowrap;overflow:hidden}
+.h2{font-size:15px;line-height:16.5px;font-weight:700;margin-top:1px;text-wrap:balance}
+.d2{font-size:12.5px;line-height:15px;color:var(--mute);font-weight:500;white-space:nowrap;overflow:hidden;margin-top:1px}
+.src{font-size:12px;line-height:15px;color:var(--mute);font-weight:500;margin-bottom:6px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>${symbols}</defs></svg>
-<div class="top"><span class="l">One day on Earth</span><span>An atlas of the day’s news · 36 stories · 6 continents</span></div>
+<div class="top"><span class="l">One day on Earth</span><span>An atlas of the day’s news · ${LAST} stories across six regions</span></div>
 <h1 class="disp">Tuesday 24 November 2026</h1>
-<div class="deck">Where the world’s news happened on one day. <b style="white-space:nowrap">Red pins 1–12</b> are the lead stories, told on the map; <b style="white-space:nowrap">black pins 13–36</b> run in the list below.</div>
+<div class="key">
+<div>${badge('1', 'r')}Red pins 1–12 <em>lead stories, told on the map</em></div>
+<div>${badge('13', 'k')}Black pins 13–${PINNED_LAST} <em>also on Tuesday, listed below</em></div>
+<div>${badge('', 'o')}${PINNED_LAST + 1}–${LAST} <em>sport and worldwide stories: no pin</em></div>
+</div>
 <div class="map">
 <svg width="${W}" height="${MAP_H}" viewBox="0 0 ${W} ${MAP_H}">
 <rect class="sea" width="${W}" height="${MAP_H}"/>
 <path class="gr" d="${graticule.join('')}"/>
-<path class="land" d="${land}"/><path class="nw" d="${news}"/>
+<path class="land" d="${land}"/>
 <path class="eq" d="M0 ${eqY.toFixed(1)}H${W}"/>
+${regionLabels}
 ${leaders}
 </svg>
 ${cards}
-<div class="key"><div class="t">Where it happened</div>
-<i><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#C0391F"/></svg></i>Lead story, card on map<br>
-<i><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#191C22"/></svg></i>Also on Tuesday, listed below<br>
-<i><svg width="12" height="10"><rect width="12" height="10" fill="#E7CBB8"/></svg></i>Country in the day’s news</div>
-<svg width="${W}" height="${MAP_H}" viewBox="0 0 ${W} ${MAP_H}" style="pointer-events:none">${pins}</svg>
+<svg width="${W}" height="${MAP_H}" viewBox="0 0 ${W} ${MAP_H}" style="pointer-events:none">${links}${pinsK}${pinsR}</svg>
 </div>
-<div class="also"><span class="t">Also on Tuesday 24 November</span><span class="s">Numbers match the black pins · 34–36 are worldwide</span></div>
-<div class="cols">${items}</div>
-<div class="foot"><span><b>Sources:</b> Al Jazeera reports dated 24 Nov 2026; Wikipedia, Portal: Current events, 24 Nov 2026. Figures as reported; claims attributed.</span><span>Map: Natural Earth · pins approximate</span></div>
+<div class="also"><span class="t">Also on Tuesday 24 November</span><span class="s">Numbers match the black pins · ${PINNED_LAST + 1}–${LAST} have no pin</span></div>
+<div class="cols">${cells}</div>
+${checker}
 </body></html>`;
 
 writeFileSync(new URL('atlas.html', here), html);
-console.log('map height', MAP_H, 'stories', LEAD.length + LIST.filter((s) => s.n).length);
+console.log('map height', MAP_H, 'stories', LEAD.length + SECTIONS.flatMap((s) => s.items).length);
