@@ -4,7 +4,9 @@
 [![rank](https://make.fun/badge/news-image-20261124/Fazleiw/news-1124-one-day-on-earth/rank.svg)](https://make.fun/bounty/news-image-20261124/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261124)
 [![reward](https://make.fun/badge/news-image-20261124/Fazleiw/news-1124-one-day-on-earth/reward.svg)](https://make.fun/bounty/news-image-20261124?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261124)
 
-One Day on Earth is an atlas of the news of Tuesday 24 November 2026: a single world map in which twelve lead stories sit in callouts beside numbered red pins, and 18 more run below by region, numbered to black pins (sport and worldwide stories have none). All 30 stories, across six regions, come from Al Jazeera's reports of that day and Wikipedia's Current events portal (see [design/sources.md](design/sources.md)).
+One Day on Earth is an atlas of the news of Tuesday 24 November 2026: one world map, where nine lead stories sit in callouts beside numbered red pins, and 23 more run below under eight section tabs, numbered to black pins (sport and worldwide stories have none). All 32 stories, across six continents, come from Al Jazeera's reports of that day and Wikipedia's Current events portal (see [design/sources.md](design/sources.md)).
+
+The type is set so it still reads at 300 px across, which is the size the judge sees: nothing is smaller than 15 px at 1024, and the smallest headline is 17 px.
 
 ![One Day on Earth, 24 November 2026](entry.png)
 

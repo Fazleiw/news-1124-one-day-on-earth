@@ -10,7 +10,9 @@ import { join } from 'node:path';
 
 const MAX_BYTES = 1024 * 1024;
 const MAX_SIDE = 1024;
+const MIN_SIDE = 256;
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG_SIG = [0xff, 0xd8, 0xff];
 
 function fail(msg) {
   console.error(`entry.png rejected: ${msg}`);
@@ -20,12 +22,16 @@ function fail(msg) {
 const bytes = readFileSync(new URL('./entry.png', import.meta.url));
 
 if (bytes.length > MAX_BYTES) fail(`${bytes.length} bytes is over ${MAX_BYTES}`);
-if (!PNG_SIG.every((b, i) => bytes[i] === b)) fail('not a PNG signature');
+const isPng = PNG_SIG.every((b, i) => bytes[i] === b);
+const isJpeg = JPEG_SIG.every((b, i) => bytes[i] === b);
+if (!isPng && !isJpeg) fail('neither a PNG nor a JPEG signature');
+if (isJpeg) fail('JPEG is accepted by the gate but this entry ships a PNG; refusing to guess its dimensions');
 if (bytes.toString('latin1', 12, 16) !== 'IHDR') fail('first chunk is not IHDR');
 
 const width = bytes.readUInt32BE(16);
 const height = bytes.readUInt32BE(20);
 if (!width || !height || width > MAX_SIDE || height > MAX_SIDE) fail(`${width}x${height} is outside 1..${MAX_SIDE}`);
+if (width < MIN_SIDE || height < MIN_SIDE) fail(`${width}x${height} is under ${MIN_SIDE}px a side; the judge reads it shrunk`);
 
 // Walk the chunks to prove the file is whole: every chunk in bounds, ending with IEND.
 let off = 8, sawEnd = false;
