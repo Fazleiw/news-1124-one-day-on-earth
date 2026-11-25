@@ -1,4 +1,4 @@
-// One Day on Earth: an atlas of the news of Tuesday 24 November 2026 (make.fun news-image-20261124).
+// One Day on Earth: an illustrated front page of the news of Tuesday 24 November 2026 (make.fun news-image-20261124).
 // Node 22, standard library only, no network. The image is entry.png beside this file (built from design/ with
 // design/render.sh); this program checks it against the gate and copies it, byte for byte, to
 // ${MAKEFUN_OUTPUT_DIR:-/output}/entry.png. Two runs write identical bytes because nothing is generated at run time.
